@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import re
 from urllib.parse import urlparse, parse_qsl
 from dotenv import load_dotenv
 import os
@@ -40,6 +41,7 @@ SHARED_APPS = [
     'django_tenants',
     'apps.users',
     'apps.organizations',
+    'apps.subscriptions',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -50,6 +52,8 @@ SHARED_APPS = [
 
     'rest_framework',
     'rest_framework_simplejwt',
+    'django_filters',
+    'cryptography',
     'drf_yasg',
     'corsheaders'
 ]
@@ -64,20 +68,34 @@ TENANT_APPS = (
 
     # Tenant-specific apps
     'apps.users',  # Tenant-specific user management
+    'apps.core',
 )
 
 
 INSTALLED_APPS = list(SHARED_APPS) + \
     [app for app in TENANT_APPS if app not in SHARED_APPS]
 
+
+# Fetch the base domain (e.g., "example.com")
+DOMAIN = os.getenv('DOMAIN', 'localhost')
+
+# Escape the domain for regex (turns "example.com" into "example\.com")
+ESCAPED_DOMAIN = re.escape(DOMAIN)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    # Matches http/https, any subdomain, and the escaped domain
+    fr"^https?://([^/]*\.)?{ESCAPED_DOMAIN}$",
+]
+
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.subscriptions.middleware.SubscriptionCheckMiddleware',   # Custom middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -189,6 +207,14 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'utils.authentication.TenantJWTAuthentication'
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '50/minute',
+        'user': '200/minute',
+    },
     # 'DEFAULT_THROTTLE_CLASSES': [
     #     'core.throttling.TenantAnonRateThrottle',
     #     'core.throttling.TenantUserRateThrottle',

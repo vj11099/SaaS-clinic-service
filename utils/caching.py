@@ -1,7 +1,7 @@
 from django.db import connection
 
 
-def make_key(key, key_prefix, version):
+def make_key(key):
     return f"{connection.schema_name}:{key}"
 
 

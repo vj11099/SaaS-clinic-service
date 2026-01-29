@@ -55,4 +55,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/', include('apps.users.urls')),
     path('tenant/', include('apps.organizations.urls')),
+    path('clinic/', include('apps.core.urls')),
 ]

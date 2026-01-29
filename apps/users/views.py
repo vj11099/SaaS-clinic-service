@@ -28,7 +28,6 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def perform_create(self, serializer):
-        # Use register view to create users
         raise exceptions.Http404()
 
     def perform_destroy(self, instance):
