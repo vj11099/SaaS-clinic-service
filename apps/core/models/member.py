@@ -6,7 +6,7 @@ from django.dispatch import receiver
 
 class Member(models.Model):
     """
-    Member model - stored in TENANT schema
+    Member model - TENANT schema
     Each tenant has its own set of members
     """
 
@@ -16,13 +16,15 @@ class Member(models.Model):
         ('member', 'Member'),
         ('guest', 'Guest'),
     ]
+
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='memberships'
     )
     role = models.CharField(
-        max_length=20, choices=ROLE_CHOICES, default='member')
+        max_length=20, choices=ROLE_CHOICES, default='member'
+    )
     is_active = models.BooleanField(default=True)
     invited_by = models.ForeignKey(
         User,
@@ -32,12 +34,11 @@ class Member(models.Model):
         related_name='invited_members'
     )
     invitation_accepted_at = models.DateTimeField(null=True, blank=True)
-
     joined_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'members_member'
+        db_table = 'user_member'
         unique_together = ['user']
         ordering = ['-joined_at']
 

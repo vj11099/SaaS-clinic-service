@@ -101,7 +101,8 @@ class MemberLimitMiddleware:
         if request.method == 'POST' and any(
             request.path.startswith(path) for path in self.MEMBER_CREATION_PATHS
         ):
-            if hasattr(request, 'organization') and request.organization.schema_name != 'public':
+            if (hasattr(request, 'organization')
+                    and request.organization.schema_name != 'public'):
                 organization = request.organization
 
                 if not organization.can_add_member():

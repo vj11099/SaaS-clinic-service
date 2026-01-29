@@ -29,6 +29,10 @@ crypto = __EncryptedField()
 
 
 class PatientQuerySet(models.QuerySet):
+    """
+    Custom QuerySet that adds active-patient filtering.
+    """
+
     def active(self):
         return self.filter(is_active=True)
 
@@ -37,6 +41,10 @@ class PatientQuerySet(models.QuerySet):
 
 
 class PatientManager(models.Manager):
+    """
+    Base manager for all patient models.
+    """
+
     def get_queryset(self):
         return PatientQuerySet(self.model, using=self._db).active()
 
@@ -51,6 +59,11 @@ class PatientManager(models.Manager):
 
 
 class Patient(models.Model):
+    """
+    Patient model - TENANT schema
+    Patients that were encountered by the organization
+    """
+
     first_name_encrypted = models.TextField()
     last_name_encrypted = models.TextField()
     date_of_birth_encrypted = models.TextField()

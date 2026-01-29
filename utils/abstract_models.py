@@ -1,9 +1,3 @@
-"""
-Core tenant-aware manager for all models in the system.
-Automatically filters queries by organization to enforce tenant isolation.
-
-Base models for tenant-aware entities.
-"""
 from django.db import models
 from django.db.models import QuerySet
 
@@ -90,21 +84,21 @@ class TenantAwareManager(TenantManager):
         return self.get_queryset().filter(is_deleted=True)
 
 
-class BaseModel(models.Model):
+class BaseAuditTrailModel(models.Model):
     """
     Abstract base model with audit trail fields.
     """
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True, db_index=True)
-    is_deleted = models.BooleanField(default=False, db_index=True)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         abstract = True
         ordering = ['-created_at']
 
 
-class TenantModel(BaseModel):
+class TenantModel(BaseAuditTrailModel):
     """
     Abstract base model for all tenant-scoped models.
     Includes organization FK and tenant-aware manager.

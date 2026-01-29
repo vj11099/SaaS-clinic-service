@@ -1,22 +1,23 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from utils.abstract_models import BaseAuditTrailModel
 
 
-class SubscriptionPlan(models.Model):
+class SubscriptionPlan(BaseAuditTrailModel):
     """
-    PUBLIC
-    Available to all tenants for selection
+    Subscription model - PUBLIC schema
+    Available subscription plans for all tenants
     """
     BILLING_INTERVAL_CHOICES = [
         ('monthly', 'Monthly'),
         ('yearly', 'Yearly'),
-        ('lifetime', 'Lifetime'),
     ]
 
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
     description = models.TextField(blank=True)
 
+    # Pricing
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -33,18 +34,29 @@ class SubscriptionPlan(models.Model):
         help_text="Maximum number of members allowed. Use -1 for unlimited",
         validators=[MinValueValidator(-1)]
     )
+
+    # Features as JSON
     features = models.JSONField(
         default=dict,
         blank=True,
         help_text="JSON object with feature flags and limits"
     )
-    is_active = models.BooleanField(default=True)
+
+    # Visibility
     is_public = models.BooleanField(
         default=True,
         help_text="Whether this plan is publicly available for subscription"
     )
+
+    # Trial configuration
+    trial_days = models.IntegerField(
+        default=14,
+        help_text="Number of trial days for this plan"
+    )
+
     sort_order = models.IntegerField(default=0)
 
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -56,30 +68,38 @@ class SubscriptionPlan(models.Model):
         return f"{self.name} ({self.get_billing_interval_display()})"
 
     def get_duration_days(self):
-        """Get duration in days based on billing interval"""
+        """
+        Get duration in days based on billing interval
+        """
         if self.billing_interval == 'monthly':
             return 30
         elif self.billing_interval == 'yearly':
             return 365
-        elif self.billing_interval == 'lifetime':
-            return 36500  # 100 years
         return 30
+
+    def can_accommodate_members(self, member_count):
+        """
+        Check if plan can accommodate given number of members
+        """
+        if self.max_members == -1:  # Unlimited
+            return True
+        return member_count <= self.max_members
 
 
 class SubscriptionHistory(models.Model):
     """
-    PUBLIC
+    Subscription History model - PUBLIC schema
     Tracks all subscription changes for a tenant
     """
     ACTION_CHOICES = [
         ('subscribed', 'Subscribed'),
-        ('renewed', 'Renewed'),
         ('upgraded', 'Upgraded'),
         ('downgraded', 'Downgraded'),
+        ('renewed', 'Renewed'),
         ('cancelled', 'Cancelled'),
         ('expired', 'Expired'),
-        ('trial_started', 'Trial Started'),
-        ('trial_ended', 'Trial Ended'),
+        ('suspended', 'Suspended'),
+        ('reactivated', 'Reactivated'),
     ]
 
     organization = models.ForeignKey(
@@ -87,14 +107,19 @@ class SubscriptionHistory(models.Model):
         on_delete=models.CASCADE,
         related_name='subscription_history'
     )
-
     plan = models.ForeignKey(
         SubscriptionPlan,
         on_delete=models.PROTECT,
         null=True,
         blank=True
     )
-
+    previous_plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='previous_subscriptions'
+    )
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
 
     # Who performed the action

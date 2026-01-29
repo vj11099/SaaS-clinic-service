@@ -5,6 +5,10 @@ from django.db import models
 
 
 class Appointment(models.Model):
+    """
+    Appointment model - TENANT schema
+    Appointments by patients with doctor
+    """
     patient = models.ForeignKey(
         Patient, on_delete=CASCADE, related_name='patient_encounters')
     doctor = models.ForeignKey(
@@ -26,7 +30,7 @@ class Appointment(models.Model):
         User, on_delete=PROTECT, related_name='updated_encounter_by_user')
 
     class Meta:
-        db_table = 'patient_encounter'
+        db_table = 'patient_appointments'
         indexes = [
             models.Index(fields=['patient', 'visit_datetime']),
             models.Index(fields=['doctor', 'visit_datetime']),

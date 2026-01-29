@@ -1,9 +1,13 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User
 from rest_framework import serializers, validators
+from django.contrib.auth.password_validation import validate_password
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True, required=True, validators=[validate_password]
+    )
     email = serializers.EmailField(
         validators=[validators.UniqueValidator(queryset=User.objects.all())]
     )
@@ -12,17 +16,25 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'username', 'email', 'first_name',
-            'last_name', 'phone'
+            'last_name', 'phone', 'password'
         )
         extra_kwargs = {
             'email': {'required': True},
             'username': {'required': True},
             'first_name': {'required': True},
             'last_name': {'required': True},
+            'password': {'required': True},
         }
 
     def create(self, validated_data):
-        return super().create(validated_data)
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
+        )
+        return user
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -35,9 +47,9 @@ class LoginSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['email'] = user.email
 
-        if user.tenant:
-            token['org_id'] = user.tenant.id
-            token['org_name'] = user.tenant.name
+#        if user.organization is not None:
+#            token['org_id'] = user.organization.id
+#            token['org_name'] = user.organization.name
 
         return token
 
@@ -47,7 +59,7 @@ class LoginSerializer(TokenObtainPairSerializer):
 
         # Add extra data to the JSON response (returned alongside the token)
         data['user_id'] = self.user.id
-        data['organization'] = self.user.tenant.name if self.user.tenant else None
+        # data['organization'] = self.user.organization.name if self.user.organization else None
 
         return data
 

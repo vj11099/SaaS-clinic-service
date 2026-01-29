@@ -17,8 +17,7 @@ class RegisterUserView(generics.CreateAPIView):
         user = serializer.save()
 
         return Response({
-            "message": "Registration successful!" +
-            "Please check your email to verify your account",
+            "message": "Registration successful!",
             "email": user.email
         }, status=status.HTTP_201_CREATED)
 
