@@ -1,94 +1,94 @@
-"""
-Authentication views for PUBLIC SCHEMA.
-Handles organization registration and super admin login.
-"""
-from rest_framework import status
+import os
+from .models import Organization, Domain
 from rest_framework.response import Response
 from django.db import transaction, connection
-from rest_framework import permissions, generics
 from django_tenants.utils import schema_context
-import os
-from ..organizations.models import Organization, Domain
-from ..organizations.serializers import OrganizationRegisterSerializer
-from utils.exceptions import success_response
+from ..subscriptions.models import SubscriptionPlan
+from utils.registration_mail import send_verification_email
+from .serializers import OrganizationRegisterSerializer
+from rest_framework import status, permissions, generics
+from ..subscriptions.services import SubscriptionService
 
 
 class OrganizationRegisterView(generics.CreateAPIView):
     """
-    Register a new organization (tenant) and create an admin user.
-    This endpoint is only available in the public schema.
+    Register a new organization (tenant) with subscription plan.
+
+    Flow:
+    1. User selects a plan and registers
+    2. Create organization (tenant + schema)
+    3. Create domain for routing
+    4. Create admin user in tenant schema
+    5. Assign subscription plan (trial or paid)
+
+    Available to anyone for self-service registration.
     """
     permission_classes = [permissions.IsAdminUser]
     serializer_class = OrganizationRegisterSerializer
 
     def post(self, request):
-        serializer = OrganizationRegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        # Ensure we're in public schema
         if connection.schema_name != 'public':
             return Response(
                 {"error": "Registration only allowed from public domain."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Validate input
+        serializer = self.get_serializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+
         try:
+            # Atomic so either all of the below queries execute or none
             with transaction.atomic():
-                # Create the organization (tenant)
-                organization = Organization.objects.create(
-                    name=serializer.validated_data['organization_name'],
-                    schema_name=serializer.validated_data[
-                        'organization_schema_name'
-                    ],
-                    contact_email=serializer.validated_data['contact_email'],
-                    contact_phone=serializer.validated_data.get(
-                        'contact_phone', ''
-                    ),
+                # Get or use default subscription plan
+                plan = self._get_subscription_plan(serializer.validated_data)
+
+                # Create organization (tenant)
+                organization = self._create_organization(
+                    serializer.validated_data)
+
+                # Create domain
+                domain = self._create_domain(organization)
+
+                # Create admin user in tenant schema
+                admin_user, generated_password = self._create_admin_user(
+                    organization,
+                    serializer.validated_data
                 )
 
-                domain_name = os.getenv('DOMAIN')
-                if not domain_name:
-                    raise Exception(
-                        'Domain name not found, please update your .env'
-                    )
-
-                # Create the domain
-                domain = Domain.objects.create(
-                    # Change in production
-                    domain=f"{organization.schema_name}.{domain_name}",
-                    tenant=organization,
-                    is_primary=True,
+                # Assign subscription plan
+                subscription_info = self._assign_subscription_plan(
+                    organization,
+                    plan,
+                    serializer.validated_data['email']
                 )
 
-                # Create admin user in the tenant's schema
-                with schema_context(organization.schema_name):
-                    from apps.users.models import User
+                send_verification_email(admin_user, generated_password)
 
-                    admin_user = User.objects.create_user(
-                        username=serializer.validated_data['username'],
-                        email=serializer.validated_data['email'],
-                        password=serializer.validated_data['password'],
-                        first_name=serializer.validated_data.get(
-                            'first_name', ''),
-                        last_name=serializer.validated_data.get(
-                            'last_name', ''),
-                        is_tenant_admin=True,
-                        is_staff=True,
-                    )
-
-                return success_response(
-                    data={
-                        'organization': {
-                            'id': organization.id,
-                            'name': organization.name,
-                            'schema_name': organization.schema_name,
-                        },
-                        'domain': domain.domain,
-                        'admin_user': {
-                            'id': admin_user.id,
-                            'username': admin_user.username,
-                            'email': admin_user.email,
+                # Step 6: Return success response
+                return Response(
+                    {
+                        'success': True,
+                        'message': 'Organization created successfully',
+                        'data': {
+                            'organization': {
+                                'id': organization.id,
+                                'name': organization.name,
+                                'schema_name': organization.schema_name,
+                            },
+                            'domain': domain.domain,
+                            'admin_user': {
+                                'id': admin_user.id,
+                                'username': admin_user.username,
+                                'email': admin_user.email,
+                            },
+                            'subscription': subscription_info
                         }
                     },
-                    message='Organization created successfully',
                     status=status.HTTP_201_CREATED
                 )
 
@@ -103,3 +103,143 @@ class OrganizationRegisterView(generics.CreateAPIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    def _get_subscription_plan(self, validated_data):
+        """Get subscription plan from request or use default trial plan"""
+        slug = validated_data.get('slug')
+
+        if slug:
+            # Use selected plan
+            return SubscriptionPlan.objects.get(
+                slug=slug,
+                is_active=True,
+                is_public=True
+            )
+        else:
+            # Use default trial plan
+            # First try to get plan with slug 'trial'
+            # If not found, get the first free plan (price = 0)
+            # If still not found, raise error
+            try:
+                return SubscriptionPlan.objects.get(
+                    slug='trial',
+                    is_active=True,
+                    is_public=True
+                )
+            except SubscriptionPlan.DoesNotExist:
+                # Fallback to first free plan
+                plan = SubscriptionPlan.objects.filter(
+                    price=0,
+                    is_active=True,
+                    is_public=True
+                ).first()
+
+                if not plan:
+                    raise Exception(
+                        "No default trial plan found. "
+                        "Please create a plan with slug 'trial' or a free plan."
+                    )
+                return plan
+
+    def _create_organization(self, validated_data):
+        """
+        Create the organization (tenant)
+        """
+        return Organization.objects.create(
+            name=validated_data['organization_name'],
+            schema_name=validated_data['organization_schema_name'],
+            contact_email=validated_data['contact_email'],
+            contact_phone=validated_data.get('contact_phone', ''),
+        )
+
+    def _create_domain(self, organization):
+        """
+        Create domain for tenant routing
+        """
+        domain_name = os.getenv('DOMAIN')
+
+        if not domain_name:
+            raise Exception(
+                'DOMAIN environment variable not set. '
+                'Please add DOMAIN to your .env file.'
+            )
+
+        return Domain.objects.create(
+            domain=f"{organization.schema_name}.{domain_name}",
+            tenant=organization,
+            is_primary=True,
+        )
+
+    def _create_admin_user(self, organization, validated_data):
+        """Create admin user and generate password in correct schema"""
+        with schema_context(organization.schema_name):
+            from apps.users.models import User
+
+            # Create user
+            admin_user = User.objects.create(
+                username=validated_data['username'],
+                email=validated_data['email'],
+                first_name=validated_data.get('first_name', ''),
+                last_name=validated_data.get('last_name', ''),
+                is_superuser=validated_data.get('is_superuser', ''),
+                is_tenant_admin=validated_data.get('is_tenant_admin', ''),
+                is_staff=validated_data.get('is_staff', ''),
+            )
+
+            # Generate password WHILE STILL in schema context
+            generated_password = admin_user.generate_password()
+
+            # Store password for email (return as tuple)
+            return admin_user, generated_password
+
+    def _assign_subscription_plan(self, organization, plan, user_email):
+        """
+        Assign subscription plan to organization
+
+        - If plan is trial plan (price = 0): Start trial
+        - If plan is paid plan: Activate immediately (no trial)
+        """
+        # Check if this is a trial plan (free or explicitly trial)
+        is_trial_plan = plan.price == 0 or plan.slug == 'trial'
+
+        if is_trial_plan:
+            # Start trial
+            SubscriptionService.start_trial(
+                organization=organization,
+                plan=plan,
+                performed_by_email=user_email,
+                trial_days=plan.trial_days
+            )
+
+            return {
+                'plan': {
+                    'id': plan.id,
+                    'name': plan.name,
+                    'price': str(plan.price),
+                },
+                'status': 'trial',
+                'is_trial': True,
+                'trial_days': plan.trial_days,
+                'trial_end_date': organization.trial_end_date.isoformat(),
+                'message': f'Trial started with {plan.trial_days} days access'
+            }
+        else:
+            # Activate paid plan immediately
+            # Note: In future verify payment first
+            SubscriptionService.subscribe(
+                organization=organization,
+                plan=plan,
+                performed_by_email=user_email
+            )
+
+            return {
+                'plan': {
+                    'id': plan.id,
+                    'name': plan.name,
+                    'price': str(plan.price),
+                },
+                'status': 'active',
+                'is_trial': False,
+                'subscription_end_date': organization.subscription_end_date.isoformat(),
+                'message': f'Subscription activated for {plan.name}'
+            }

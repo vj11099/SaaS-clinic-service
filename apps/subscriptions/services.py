@@ -1,14 +1,8 @@
-"""
-Subscription Service
-subscriptions/services.py
-
-Business logic layer for subscription management
-"""
 from django.utils import timezone
 from django.db import transaction
 from datetime import timedelta
 from .models import SubscriptionPlan, SubscriptionHistory
-from organizations.models import Organization
+from ..organizations.models import Organization
 
 
 class SubscriptionService:

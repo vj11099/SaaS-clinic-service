@@ -23,18 +23,20 @@ class RegisterSerializer(serializers.ModelSerializer):
             'username': {'required': True},
             'first_name': {'required': True},
             'last_name': {'required': True},
-            'password': {'required': True},
         }
 
     def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', '')
-        )
-        return user
+        return super().create(validated_data)
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    old_password = serializers.CharField(write_only=True, required=True)
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password]
+    )
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -47,16 +49,13 @@ class LoginSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['email'] = user.email
 
-#        if user.organization is not None:
-#            token['org_id'] = user.organization.id
-#            token['org_name'] = user.organization.name
-
         return token
 
     def validate(self, attrs):
         # Standard validation (checks password)
         data = super().validate(attrs)
 
+        print(data)
         # Add extra data to the JSON response (returned alongside the token)
         data['user_id'] = self.user.id
         # data['organization'] = self.user.organization.name if self.user.organization else None

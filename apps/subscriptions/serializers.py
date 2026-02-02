@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import SubscriptionPlan, SubscriptionHistory
-from organizations.models import Organization
+from ..organizations.models import Organization
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
@@ -39,7 +39,8 @@ class SubscriptionPlanListSerializer(serializers.ModelSerializer):
     """Lighter serializer for listing plans"""
 
     duration_days = serializers.IntegerField(
-        source='get_duration_days', read_only=True)
+        source='get_duration_days', read_only=True
+    )
 
     class Meta:
         model = SubscriptionPlan

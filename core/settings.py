@@ -32,6 +32,12 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+HOURS = 10
+MINUTES = 5
+SECONDS = 0
+
+PASSWORD_RESET_TIMEOUT_IN_SECONDS = (HOURS*60*60) + (MINUTES*60) + SECONDS
+
 
 # Application definition
 TENANT_MODEL = "organizations.Organization"
@@ -95,9 +101,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'apps.subscriptions.middleware.SubscriptionCheckMiddleware',   # Custom middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # 'apps.subscriptions.middleware.SubscriptionStatusUpdateMiddleware',
+    'apps.subscriptions.middleware.SubscriptionEnforcementMiddleware',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -125,11 +133,8 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Add these at the top of your settings.py
-
 load_dotenv()
 
-# Replace the DATABASES section of your settings.py with this
 tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 
 DATABASES = {
@@ -215,6 +220,9 @@ REST_FRAMEWORK = {
         'anon': '50/minute',
         'user': '200/minute',
     },
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend'
+    ],
     # 'DEFAULT_THROTTLE_CLASSES': [
     #     'core.throttling.TenantAnonRateThrottle',
     #     'core.throttling.TenantUserRateThrottle',
@@ -236,3 +244,12 @@ SIMPLE_JWT = {
 }
 
 # ROOT_URLCONF = 'config.urls_public'
+
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_HOST_USER = 'vishvamjoshi11099@gmail.com'
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
+
+DEFAULT_FROM_EMAIL = 'noreply@yourapp.com'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

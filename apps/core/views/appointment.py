@@ -28,6 +28,7 @@ class AppointmentViews(viewsets.ModelViewSet):
 
         return queryset
 
+
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
 

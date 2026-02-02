@@ -66,6 +66,9 @@ class Patient(models.Model):
 
     first_name_encrypted = models.TextField()
     last_name_encrypted = models.TextField()
+    first_name_hash = models.CharField(max_length=64, db_index=True, null=True)
+    last_name_hash = models.CharField(max_length=64, db_index=True, null=True)
+
     date_of_birth_encrypted = models.TextField()
     gender_encrypted = models.TextField()
     allergies_encrypted = models.TextField(null=True)
@@ -97,6 +100,7 @@ class Patient(models.Model):
     @first_name.setter
     def first_name(self, value):
         self.first_name_encrypted = crypto.encrypt(value)
+        self.first_name_hash = crypto.hash(value.lower())
 
     @property
     def last_name(self):
@@ -105,6 +109,7 @@ class Patient(models.Model):
     @last_name.setter
     def last_name(self, value):
         self.last_name_encrypted = crypto.encrypt(value)
+        self.last_name_hash = crypto.hash(value.lower())
 
     @property
     def date_of_birth(self):

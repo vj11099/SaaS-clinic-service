@@ -1,116 +1,111 @@
-# subscriptions/middleware.py
+"""
+Subscription Middleware
+subscriptions/middleware.py
 
+Middleware to enforce subscription limits and check status
+"""
+# from django.utils import timezone
 from django.http import JsonResponse
-from django.contrib.auth import logout
+from django.urls import resolve
+from rest_framework import status
 
 
-class SubscriptionCheckMiddleware:
+class SubscriptionEnforcementMiddleware:
     """
-    Middleware to check subscription status and restrict access
+    Middleware to enforce subscription limits
+
+    Add to MIDDLEWARE in settings.py:
+    MIDDLEWARE = [
+        ...
+        'subscriptions.middleware.SubscriptionEnforcementMiddleware',
+    ]
     """
 
-    # Paths that don't require subscription check
+    # Endpoints that should be accessible even with expired subscription
     EXEMPT_PATHS = [
-        '/api/auth/login/',
-        '/api/auth/logout/',
-        '/api/plans/',
-        '/api/subscription/status/',
-        '/api/subscription/subscribe/',
-        '/admin/',
+        'subscriptions:plans',
+        'subscriptions:current',
+        'subscriptions:subscribe',
+        'subscriptions:renew',
+        'subscriptions:history',
+        'auth:login',
+        'auth:logout',
+        'auth:register',
+        'auth:verify',
     ]
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Skip for exempt paths
-        if any(request.path.startswith(path) for path in self.EXEMPT_PATHS):
+        # Skip for non-API requests or exempt paths
+        if not request.path.startswith('/api/'):
             return self.get_response(request)
 
-        # Skip if on public schema or no organization
-        if not hasattr(request, 'organization') or request.organization.schema_name == 'public':
+        # Check if path is exempt
+        if self._is_exempt_path(request):
             return self.get_response(request)
 
         # Get organization from request
-        organization = request.organization
+        organization = getattr(request, 'tenant', None) or getattr(
+            request, 'organization', None)
 
-        # Check subscription status
-        subscription_status = organization.get_subscription_status()
+        if organization:
+            # Check subscription status
+            if not organization.is_subscription_active():
+                return JsonResponse({
+                    'error': 'Subscription expired',
+                    'detail': 'Your subscription has expired. Please renew to continue.',
+                    'subscription_status': organization.subscription_status,
+                    'expired_at': organization.subscription_end_date or organization.trial_end_date,
+                }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
-        # Handle different statuses
-        if subscription_status['status'] == 'expired':
-            # Subscription has expired and grace period is over
-            if request.user.is_authenticated:
-                logout(request)
+            # Check if organization is suspended
+            if organization.subscription_status == 'suspended':
+                return JsonResponse({
+                    'error': 'Account suspended',
+                    'detail': 'Your account has been suspended. Please contact support.',
+                }, status=status.HTTP_403_FORBIDDEN)
 
-            return JsonResponse({
-                'error': 'subscription_expired',
-                'message': 'Your subscription has expired. Please renew to continue using the service.',
-                'status': subscription_status
-            }, status=402)  # 402 Payment Required
+        response = self.get_response(request)
+        return response
 
-        elif subscription_status['status'] == 'trial_expired':
-            # Trial has expired
-            if request.user.is_authenticated:
-                logout(request)
+    def _is_exempt_path(self, request):
+        """Check if the request path is exempt from subscription checks"""
+        try:
+            resolved = resolve(request.path)
+            route_name = f"{resolved.namespace}:{
+                resolved.url_name}" if resolved.namespace else resolved.url_name
+            return route_name in self.EXEMPT_PATHS
 
-            return JsonResponse({
-                'error': 'trial_expired',
-                'message': 'Your trial period has ended. Please subscribe to a plan to continue.',
-                'status': subscription_status
-            }, status=402)
-
-        elif subscription_status['status'] == 'grace_period':
-            # In grace period - allow access but add warning header
-            response = self.get_response(request)
-            response['X-Subscription-Warning'] = 'grace_period'
-            response['X-Days-Remaining'] = str(
-                subscription_status['days_remaining'])
-            return response
-
-        elif subscription_status['status'] == 'no_subscription':
-            # No subscription at all
-            if request.user.is_authenticated:
-                logout(request)
-
-            return JsonResponse({
-                'error': 'no_subscription',
-                'message': 'No active subscription found. Please subscribe to a plan.',
-                'status': subscription_status
-            }, status=402)
-
-        # Subscription is active - continue normally
-        return self.get_response(request)
+        except Exception as e:
+            return False
 
 
-class MemberLimitMiddleware:
+class SubscriptionStatusUpdateMiddleware:
     """
-    Middleware to check member limits before allowing member addition
-    """
+    Middleware to update subscription status on each request
+    This ensures status is always current
 
-    MEMBER_CREATION_PATHS = [
-        '/api/members/',
-        '/api/members/invite/',
+    Add to MIDDLEWARE in settings.py (before SubscriptionEnforcementMiddleware):
+    MIDDLEWARE = [
+        ...
+        'subscriptions.middleware.SubscriptionStatusUpdateMiddleware',
+        'subscriptions.middleware.SubscriptionEnforcementMiddleware',
     ]
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Only check for POST requests to member creation endpoints
-        if request.method == 'POST' and any(
-            request.path.startswith(path) for path in self.MEMBER_CREATION_PATHS
-        ):
-            if (hasattr(request, 'organization')
-                    and request.organization.schema_name != 'public'):
-                organization = request.organization
+        # Get organization from request
+        organization = getattr(request, 'tenant', None) or getattr(
+            request, 'organization', None)
 
-                if not organization.can_add_member():
-                    return JsonResponse({
-                        'error': 'member_limit_reached',
-                        'message': f'Your current plan allows maximum {organization.subscription_plan.max_members} members. Please upgrade to add more.',
-                        'current_count': organization.current_member_count,
-                        'max_allowed': organization.subscription_plan.max_members
-                    }, status=403)
+        if organization:
+            # Update subscription status
+            organization.update_subscription_status()
 
-        return self.get_response(request)
+        response = self.get_response(request)
+        return response
