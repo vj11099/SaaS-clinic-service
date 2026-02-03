@@ -48,7 +48,6 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
         POST /api/subscriptions/renew/ - Renew subscription
         POST /api/subscriptions/cancel/ - Cancel subscription
         GET /api/subscriptions/history/ - Get subscription history
-        POST /api/subscriptions/check-status/ - Check and update subscription status
     """
     permission_classes = [IsAuthenticated, IsOrganizationOwnerOrAdmin]
 
@@ -289,29 +288,3 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
         serializer = SubscriptionHistorySerializer(history, many=True)
 
         return Response(serializer.data)
-
-    @action(detail=False, methods=['post'])
-    def check_status(self, request):
-        """
-        Check and update subscription status
-
-        POST /api/subscriptions/check-status/
-        """
-        organization = self.get_organization()
-
-        if not organization:
-            return Response(
-                {'error': 'Organization not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        new_status = SubscriptionService.check_subscription_status(
-            organization
-        )
-
-        org_serializer = OrganizationSubscriptionSerializer(organization)
-
-        return Response({
-            'status': new_status,
-            'subscription': org_serializer.data
-        })
