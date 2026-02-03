@@ -90,7 +90,9 @@ class SubscriptionHistorySerializer(serializers.ModelSerializer):
 
 
 class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
-    """Serializer for organization subscription details"""
+    """
+    Serializer for organization subscription details
+    """
 
     plan = SubscriptionPlanSerializer(
         source='subscription_plan', read_only=True)
@@ -140,25 +142,27 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
 
 
 class SubscribeSerializer(serializers.Serializer):
-    """Serializer for subscribing to a plan"""
+    """
+    Serializer for subscribing to a plan
+    """
+    slug = serializers.SlugField(required=True)
 
-    plan_id = serializers.IntegerField(required=True)
-    start_trial = serializers.BooleanField(default=False)
-
-    def validate_plan_id(self, value):
+    def validate_slug(self, value):
         """Validate that plan exists and is active"""
         try:
-            plan = SubscriptionPlan.objects.get(
-                id=value, is_active=True, is_public=True)
+            SubscriptionPlan.objects.get(
+                slug=value, is_active=True, is_public=True
+            )
         except SubscriptionPlan.DoesNotExist:
             raise serializers.ValidationError(
-                "Invalid or inactive subscription plan")
+                "Invalid or inactive subscription plan"
+            )
 
         return value
 
     def validate(self, attrs):
         """Additional validation"""
-        plan = SubscriptionPlan.objects.get(id=attrs['plan_id'])
+        plan = SubscriptionPlan.objects.get(slug=attrs['slug'])
         organization = self.context.get('organization')
 
         # Check if organization can accommodate current members
@@ -182,14 +186,14 @@ class CancelSubscriptionSerializer(serializers.Serializer):
 class RenewSubscriptionSerializer(serializers.Serializer):
     """Serializer for renewing subscription"""
 
-    plan_id = serializers.IntegerField(required=False)
+    slug = serializers.SlugField(required=False)
 
     def validate_plan_id(self, value):
         """Validate that plan exists and is active"""
         if value:
             try:
                 SubscriptionPlan.objects.get(
-                    id=value, is_active=True, is_public=True)
+                    slug=value, is_active=True, is_public=True)
             except SubscriptionPlan.DoesNotExist:
                 raise serializers.ValidationError(
                     "Invalid or inactive subscription plan")

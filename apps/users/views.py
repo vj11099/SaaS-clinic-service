@@ -6,7 +6,7 @@ from .serializers import (
     ResetPasswordSerializer
 )
 from rest_framework import (
-    permissions, generics, status, viewsets, exceptions, views
+    permissions, generics, status, viewsets, exceptions
 )
 from rest_framework.response import Response
 from .models import User
@@ -23,8 +23,7 @@ class RegisterUserView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-
-        send_verification_email(user)
+        send_verification_email(user, None)
 
         return Response({
             "message": "Registration successful!",
@@ -32,7 +31,8 @@ class RegisterUserView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class VerifyUserView(views.APIView):
+class VerifyUserView(generics.UpdateAPIView):
+    allowed_methods = ['put']
     permission_classes = [permissions.AllowAny]
     serializer_class = ResetPasswordSerializer
 

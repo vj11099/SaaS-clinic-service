@@ -23,7 +23,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
 
     Available to anyone for self-service registration.
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = OrganizationRegisterSerializer
 
     def post(self, request):

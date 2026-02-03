@@ -89,7 +89,8 @@ class HasActiveSubscription(permissions.BasePermission):
         """Check if organization has active subscription"""
         # Get organization from request
         organization = getattr(request, 'tenant', None) or getattr(
-            request, 'organization', None)
+            request, 'organization', None
+        )
 
         if not organization:
             return False

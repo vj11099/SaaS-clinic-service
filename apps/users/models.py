@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.hashers import check_password
 from datetime import timedelta
 from django.contrib.postgres.fields import ArrayField
-
+from django.core.validators import RegexValidator
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -14,7 +14,16 @@ class User(AbstractUser):
     For users from public schema and organizations
     """
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone_validator = RegexValidator(
+        regex=r'^\d{10}$',
+        message="Phone number must be exactly 10 digits (e.g., 1234567890)."
+    )
+    phone = models.CharField(
+        null=True,
+        blank=True,
+        max_length=10,
+        validators=[phone_validator],
+    )
 
     is_tenant_admin = models.BooleanField(default=False)
     # add roles later

@@ -12,7 +12,7 @@ class UserAdmin(BaseUserAdmin):
     ordering = ['-created_at']
 
     fieldsets = (
-        (None, {'fields': ('username', 'password')}),
+        (None, {'fields': ('username',)}),
         ('Personal info', {'fields': ('first_name',
          'last_name', 'email', 'phone')}),
         ('Permissions', {
@@ -30,6 +30,6 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'email', 'password1', 'password2'),
+            'fields': ('username', 'email'),
         }),
     )

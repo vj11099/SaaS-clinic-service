@@ -2,6 +2,7 @@ from django.utils import timezone
 from django.db import models
 from django_tenants.models import TenantMixin, DomainMixin
 from datetime import timedelta
+from django.core.validators import RegexValidator
 
 
 class Organization(TenantMixin):
@@ -24,6 +25,17 @@ class Organization(TenantMixin):
 
     # Contact Info
     contact_email = models.EmailField()
+    phone_validator = RegexValidator(
+        regex=r'^\d{10}$',
+        message="Phone number must be exactly 10 digits (e.g., 1234567890)."
+    )
+    contact_phone = models.CharField(
+        null=True,
+        blank=True,
+        max_length=10,
+        validators=[phone_validator],
+    )
+
     contact_phone = models.CharField(max_length=20, blank=True, null=True)
 
     # Status

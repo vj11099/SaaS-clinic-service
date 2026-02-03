@@ -2,9 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
 
-from .models import SubscriptionPlan, SubscriptionHistory
+from .models import SubscriptionPlan
 from .serializers import (
     SubscriptionPlanSerializer,
     SubscriptionPlanListSerializer,
@@ -70,6 +69,9 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
         # or request.organization based on the current tenant
         return getattr(self.request, 'tenant', None) or getattr(self.request, 'organization', None)
 
+    def make_organization(self):
+        pass
+
     @action(detail=False, methods=['get'])
     def current(self, request):
         """
@@ -95,8 +97,7 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
 
         POST /api/subscriptions/subscribe/
         Body: {
-            "plan_id": 1,
-            "start_trial": false
+            "slug": "trial",
         }
         """
         organization = self.get_organization()
@@ -118,11 +119,10 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        plan_id = serializer.validated_data['plan_id']
-        start_trial = serializer.validated_data.get('start_trial', False)
+        slug = serializer.validated_data['slug']
 
         try:
-            plan = SubscriptionService.get_plan_by_id(plan_id)
+            plan = SubscriptionService.get_plan_by_slug(slug)
 
             if not plan:
                 return Response(
@@ -130,21 +130,12 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            # Start trial or subscribe
-            if start_trial:
-                organization = SubscriptionService.start_trial(
-                    organization=organization,
-                    plan=plan,
-                    performed_by_email=request.user.email
-                )
-                message = f"Trial started successfully for {plan.name}"
-            else:
-                organization = SubscriptionService.subscribe(
-                    organization=organization,
-                    plan=plan,
-                    performed_by_email=request.user.email
-                )
-                message = f"Successfully subscribed to {plan.name}"
+            organization = SubscriptionService.subscribe(
+                organization=organization,
+                plan=plan,
+                performed_by_email=request.user.email
+            )
+            message = f"Successfully subscribed to {plan.name}"
 
             org_serializer = OrganizationSubscriptionSerializer(organization)
 
@@ -166,7 +157,7 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
 
         POST /api/subscriptions/renew/
         Body: {
-            "plan_id": 2  // Optional - to switch plans during renewal
+            "slug": "basic"  // Optional - to switch plans during renewal
         }
         """
         organization = self.get_organization()
@@ -185,11 +176,11 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        plan_id = serializer.validated_data.get('plan_id')
+        slug = serializer.validated_data.get('slug')
         new_plan = None
 
-        if plan_id:
-            new_plan = SubscriptionService.get_plan_by_id(plan_id)
+        if slug:
+            new_plan = SubscriptionService.get_plan_by_slug(slug)
             if not new_plan:
                 return Response(
                     {'error': 'Plan not found'},
@@ -318,7 +309,8 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
             )
 
         new_status = SubscriptionService.check_subscription_status(
-            organization)
+            organization
+        )
 
         org_serializer = OrganizationSubscriptionSerializer(organization)
 

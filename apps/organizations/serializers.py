@@ -28,10 +28,10 @@ class OrganizationRegisterSerializer(serializers.Serializer):
         required=True,
         help_text="Organization contact email"
     )
-    contact_phone = serializers.CharField(
-        max_length=20,
+
+    contact_phone = serializers.IntegerField(
         required=False,
-        allow_blank=True,
+        # allow_blank=True,
         help_text="Organization contact phone"
     )
 
@@ -73,6 +73,17 @@ class OrganizationRegisterSerializer(serializers.Serializer):
     is_staff = serializers.BooleanField(
         default=False,
     )
+
+    class Meta:
+        model = Organization
+        extra_kwargs = {
+            'contact_phone': {
+                'help_text': 'Enter a 10-digit phone number.',
+                'error_messages': {
+                    'invalid': 'Ensure this value has exactly 10 digits.'
+                }
+            }
+        }
 
     def validate_organization_schema_name(self, value):
         """Ensure schema name is unique"""
