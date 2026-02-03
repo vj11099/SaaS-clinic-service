@@ -41,46 +41,44 @@ class SubscriptionService:
             return None
 
     @staticmethod
-    @transaction.atomic
-    def start_trial(organization, plan, performed_by_email, trial_days=None):
+    def _ensure_member_profile_exists(user):
         """
-        Start a trial subscription for an organization
+        Ensure user has a member profile in the current tenant schema.
+        If not, create one.
 
         Args:
-            organization: Organization instance
-            plan: SubscriptionPlan instance
-            performed_by_email: Email of user performing the action
-            trial_days: Number of trial days (defaults to plan's trial_days)
+            user: User instance
 
         Returns:
-            Organization instance
+            Member instance
         """
-        if trial_days is None:
-            trial_days = plan.trial_days
+        try:
+            return user.member_profile
+        except AttributeError:
+            # Member profile doesn't exist, create it
+            from ..members.models import Member
 
-        # Activate trial on organization
-        organization.activate_trial(plan, trial_days)
+            # Determine role based on user flags
+            if user.is_superuser or user.is_tenant_admin:
+                role = 'owner'
+            elif user.is_staff:
+                role = 'admin'
+            else:
+                role = 'member'
 
-        # Create history record
-        SubscriptionHistory.objects.create(
-            organization=organization,
-            plan=plan,
-            action='subscribed',
-            performed_by_email=performed_by_email,
-            start_date=organization.subscription_start_date,
-            end_date=organization.trial_end_date,
-            metadata={
-                'is_trial': True,
-                'trial_days': trial_days,
-            },
-            notes=f"Started {trial_days}-day trial for {plan.name}"
-        )
+            member = Member.objects.create(
+                user=user,
+                email=user.email,
+                phone=user.phone or '',
+                role=role,
+                status='active'
+            )
 
-        return organization
+            return member
 
     @staticmethod
     @transaction.atomic
-    def subscribe(organization, plan, performed_by_email):
+    def subscribe(organization, plan, performed_by_email, performed_by_user=None):
         """
         Subscribe an organization to a paid plan
 
@@ -88,10 +86,16 @@ class SubscriptionService:
             organization: Organization instance
             plan: SubscriptionPlan instance
             performed_by_email: Email of user performing the action
+            performed_by_user: User instance (optional, for member profile check)
 
         Returns:
             Organization instance
         """
+        # Ensure user has member profile if user object provided
+        if performed_by_user:
+            SubscriptionService._ensure_member_profile_exists(
+                performed_by_user)
+
         # Check member limit
         if not plan.can_accommodate_members(organization.current_member_count):
             raise ValueError(
@@ -100,16 +104,12 @@ class SubscriptionService:
             )
 
         previous_plan = organization.subscription_plan
-        was_trial = organization.is_trial
 
         # Subscribe organization
         organization.subscribe(plan)
 
         # Determine action type
-        if was_trial:
-            action = 'subscribed'
-            notes = f"Converted from trial to {plan.name}"
-        elif previous_plan:
+        if previous_plan:
             if plan.price > previous_plan.price:
                 action = 'upgraded'
                 notes = f"Upgraded from {previous_plan.name} to {plan.name}"
@@ -133,8 +133,6 @@ class SubscriptionService:
             start_date=organization.subscription_start_date,
             end_date=organization.subscription_end_date,
             metadata={
-                'is_trial': False,
-                'was_trial': was_trial,
                 'billing_interval': plan.billing_interval,
                 'price': str(plan.price),
             },
@@ -145,7 +143,7 @@ class SubscriptionService:
 
     @staticmethod
     @transaction.atomic
-    def renew_subscription(organization, performed_by_email, new_plan=None):
+    def renew_subscription(organization, performed_by_email, new_plan=None, performed_by_user=None):
         """
         Renew an organization's subscription
 
@@ -153,12 +151,18 @@ class SubscriptionService:
             organization: Organization instance
             performed_by_email: Email of user performing the action
             new_plan: Optional new SubscriptionPlan to switch to
+            performed_by_user: User instance (optional, for member profile check)
 
         Returns:
             Organization instance
         """
         if not organization.subscription_plan:
             raise ValueError("Organization has no active subscription plan")
+
+        # Ensure user has member profile if user object provided
+        if performed_by_user:
+            SubscriptionService._ensure_member_profile_exists(
+                performed_by_user)
 
         previous_plan = organization.subscription_plan
 
@@ -199,7 +203,7 @@ class SubscriptionService:
 
     @staticmethod
     @transaction.atomic
-    def cancel_subscription(organization, performed_by_email, reason=None, immediate=False):
+    def cancel_subscription(organization, performed_by_email, reason=None, immediate=False, performed_by_user=None):
         """
         Cancel an organization's subscription
 
@@ -208,12 +212,18 @@ class SubscriptionService:
             performed_by_email: Email of user performing the action
             reason: Optional cancellation reason
             immediate: If True, suspend immediately; otherwise wait until end date
+            performed_by_user: User instance (optional, for member profile check)
 
         Returns:
             Organization instance
         """
         if not organization.subscription_plan:
             raise ValueError("Organization has no subscription to cancel")
+
+        # Ensure user has member profile if user object provided
+        if performed_by_user:
+            SubscriptionService._ensure_member_profile_exists(
+                performed_by_user)
 
         organization.cancel_subscription(reason)
 
@@ -301,6 +311,6 @@ class SubscriptionService:
         now = timezone.now()
 
         return Organization.objects.filter(
-            subscription_status__in=['active', 'trial'],
+            subscription_status__in=['active'],
             subscription_end_date__lt=now
         )

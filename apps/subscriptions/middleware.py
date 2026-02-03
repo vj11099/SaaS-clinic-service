@@ -57,7 +57,7 @@ class SubscriptionEnforcementMiddleware:
                     'error': 'Subscription expired',
                     'detail': 'Your subscription has expired. Please renew to continue.',
                     'subscription_status': organization.subscription_status,
-                    'expired_at': organization.subscription_end_date or organization.trial_end_date,
+                    'expired_at': organization.subscription_end_date,
                 }, status=status.HTTP_402_PAYMENT_REQUIRED)
 
             # Check if organization is suspended

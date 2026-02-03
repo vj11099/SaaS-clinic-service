@@ -11,7 +11,6 @@ class Organization(TenantMixin):
     Each tenant represents a separate organization/workspace
     """
     SUBSCRIPTION_STATUS_CHOICES = [
-        ('trial', 'Trial'),
         ('active', 'Active'),
         ('expired', 'Expired'),
         ('cancelled', 'Cancelled'),
@@ -32,11 +31,9 @@ class Organization(TenantMixin):
     contact_phone = models.CharField(
         null=True,
         blank=True,
-        max_length=10,
+        max_length=20,
         validators=[phone_validator],
     )
-
-    contact_phone = models.CharField(max_length=20, blank=True, null=True)
 
     # Status
     is_active = models.BooleanField(default=True)
@@ -55,15 +52,10 @@ class Organization(TenantMixin):
     )
     subscription_status = models.CharField(
         max_length=20,
-        choices=SUBSCRIPTION_STATUS_CHOICES,
-        default='trial'
+        choices=SUBSCRIPTION_STATUS_CHOICES
     )
     subscription_start_date = models.DateTimeField(null=True, blank=True)
     subscription_end_date = models.DateTimeField(null=True, blank=True)
-
-    # Trial information
-    is_trial = models.BooleanField(default=True)
-    trial_end_date = models.DateTimeField(null=True, blank=True)
 
     # Member tracking
     current_member_count = models.IntegerField(default=1)  # Owner counts as 1
@@ -96,10 +88,6 @@ class Organization(TenantMixin):
         """Check if subscription is currently active"""
         now = timezone.now()
 
-        # Check trial
-        if self.is_trial and self.trial_end_date:
-            return now <= self.trial_end_date
-
         # Check paid subscription
         if self.subscription_end_date:
             return now <= self.subscription_end_date
@@ -110,9 +98,6 @@ class Organization(TenantMixin):
         """Check if subscription has expired"""
         now = timezone.now()
 
-        if self.is_trial and self.trial_end_date:
-            return now > self.trial_end_date
-
         if self.subscription_end_date:
             return now > self.subscription_end_date
 
@@ -122,11 +107,7 @@ class Organization(TenantMixin):
         """Get number of days until subscription expires"""
         now = timezone.now()
 
-        expiry_date = (
-            self.trial_end_date
-            if self.is_trial
-            else self.subscription_end_date
-        )
+        expiry_date = (self.subscription_end_date)
 
         if not expiry_date:
             return None
@@ -173,33 +154,10 @@ class Organization(TenantMixin):
             elif now > self.subscription_end_date:
                 self.subscription_status = 'expired'
 
-        # Check trial expiry
-        if self.is_trial and self.trial_end_date and now > self.trial_end_date:
-            if not self.subscription_plan or self.subscription_plan.price == 0:
-                self.subscription_status = 'expired'
-
         self.save(update_fields=['subscription_status',
                   'is_active', 'updated_at'])
 
         return self.subscription_status
-
-    def activate_trial(self, plan, trial_days=None):
-        """Activate trial subscription for this organization"""
-        if trial_days is None:
-            trial_days = plan.trial_days if plan else 14
-
-        now = timezone.now()
-
-        self.subscription_plan = plan
-        self.is_trial = True
-        self.trial_end_date = now + timedelta(days=trial_days)
-        self.subscription_status = 'trial'
-        self.subscription_start_date = now
-        self.is_active = True
-
-        self.save()
-
-        return self
 
     def subscribe(self, plan):
         """Subscribe to a paid plan"""
@@ -207,8 +165,6 @@ class Organization(TenantMixin):
         duration_days = plan.get_duration_days()
 
         self.subscription_plan = plan
-        self.is_trial = False
-        self.trial_end_date = None
         self.subscription_start_date = now
         self.subscription_end_date = now + timedelta(days=duration_days)
         self.subscription_status = 'active'
@@ -235,7 +191,6 @@ class Organization(TenantMixin):
         self.subscription_end_date = start_date + timedelta(days=duration_days)
         self.subscription_status = 'active'
         self.is_active = True
-        self.is_trial = False
 
         self.save()
 

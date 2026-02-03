@@ -23,7 +23,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'username': {'required': True},
             'first_name': {'required': True},
             'last_name': {'required': True},
-            'phone_number': {
+            'phone': {
                 'help_text': 'Enter a 10-digit phone number.',
                 'error_messages': {
                     'invalid': 'Ensure this value has exactly 10 digits.'
@@ -43,6 +43,17 @@ class ResetPasswordSerializer(serializers.Serializer):
         required=True,
         validators=[validate_password]
     )
+
+#    class Meta:
+#        model = User
+#        fields = (
+#            'email', 'old_password', 'new_password'
+#        )
+#        extra_kwargs = {
+#            'email': {'required': True},
+#            'old_password': {'required': True},
+#            'new_password': {'required': True}
+#        }
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -67,10 +78,10 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name',
-            'phone_number', 'date_of_birth',
+            'phone', 'date_of_birth',
         )
         extra_kwargs = {
-            'phone_number': {
+            'phone': {
                 'help_text': 'Enter a 10-digit phone number.',
                 'error_messages': {
                     'invalid': 'Ensure this value has exactly 10 digits.'

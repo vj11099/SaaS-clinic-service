@@ -29,9 +29,9 @@ class OrganizationRegisterSerializer(serializers.Serializer):
         help_text="Organization contact email"
     )
 
-    contact_phone = serializers.IntegerField(
+    contact_phone = serializers.CharField(
         required=False,
-        # allow_blank=True,
+        allow_blank=True,
         help_text="Organization contact phone"
     )
 
@@ -61,14 +61,14 @@ class OrganizationRegisterSerializer(serializers.Serializer):
     slug = serializers.CharField(
         required=False,
         allow_null=True,
-        help_text="Slug field of subscription plan (optional for admin, defaults to trial plan)"
+        help_text="Slug field of subscription plan (optional for admin)"
     )
 
     is_superuser = serializers.BooleanField(
         default=False,
     )
     is_tenant_admin = serializers.BooleanField(
-        default=False,
+        default=True,
     )
     is_staff = serializers.BooleanField(
         default=False,

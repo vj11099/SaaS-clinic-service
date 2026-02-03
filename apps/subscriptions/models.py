@@ -48,12 +48,6 @@ class SubscriptionPlan(BaseAuditTrailModel):
         help_text="Whether this plan is publicly available for subscription"
     )
 
-    # Trial configuration
-    trial_days = models.IntegerField(
-        default=14,
-        help_text="Number of trial days for this plan"
-    )
-
     sort_order = models.IntegerField(default=0)
 
     is_active = models.BooleanField(default=True)

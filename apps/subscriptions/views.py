@@ -69,9 +69,6 @@ class OrganizationSubscriptionViewSet(viewsets.GenericViewSet):
         # or request.organization based on the current tenant
         return getattr(self.request, 'tenant', None) or getattr(self.request, 'organization', None)
 
-    def make_organization(self):
-        pass
-
     @action(detail=False, methods=['get'])
     def current(self, request):
         """

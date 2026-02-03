@@ -16,7 +16,6 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
         'price',
         'billing_interval',
         'max_members',
-        'trial_days',
         'is_active',
         'is_public',
         'sort_order',
@@ -37,9 +36,6 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
         ('Limits & Features', {
             'fields': ('max_members', 'features')
         }),
-        ('Trial Configuration', {
-            'fields': ('trial_days',)
-        }),
         ('Visibility', {
             'fields': ('is_active', 'is_public', 'sort_order')
         }),
@@ -47,8 +43,8 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
 
     def subscriber_count(self, obj):
         """Show number of organizations subscribed to this plan"""
-        count = obj.organizations.filter(subscription_status__in=[
-                                         'active', 'trial']).count()
+        count = obj.organizations.filter(
+            subscription_status__in=['active']).count()
         return format_html('<strong>{}</strong>', count)
 
     subscriber_count.short_description = 'Active Subscribers'

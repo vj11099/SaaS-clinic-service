@@ -28,7 +28,6 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             'features',
             'is_active',
             'is_public',
-            'trial_days',
             'sort_order',
             'created_at',
         ]
@@ -53,7 +52,6 @@ class SubscriptionPlanListSerializer(serializers.ModelSerializer):
             'billing_interval',
             'duration_days',
             'max_members',
-            'trial_days',
         ]
 
 
@@ -112,8 +110,6 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
             'subscription_status',
             'subscription_start_date',
             'subscription_end_date',
-            'is_trial',
-            'trial_end_date',
             'current_member_count',
             'member_limit',
             'is_active',
@@ -127,7 +123,6 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
             'id',
             'subscription_start_date',
             'subscription_end_date',
-            'trial_end_date',
             'cancelled_at',
         ]
 

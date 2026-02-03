@@ -1,4 +1,4 @@
-from rest_framework.permissions import DjangoModelPermissions
+from rest_framework.permissions import IsAuthenticated
 from ..models.patients import Patient
 from ..serializers.patients import PatientSerializer
 from ..services.patients import PatientFilter
@@ -12,7 +12,7 @@ from django.db import IntegrityError
 
 class PatientViews(viewsets.ModelViewSet):
     serializer_class = PatientSerializer
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_class = PatientFilter
     queryset = Patient.objects.all()

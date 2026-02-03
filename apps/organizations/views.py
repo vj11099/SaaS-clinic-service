@@ -19,7 +19,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
     2. Create organization (tenant + schema)
     3. Create domain for routing
     4. Create admin user in tenant schema
-    5. Assign subscription plan (trial or paid)
+    5. Assign subscription plan (paid)
 
     Available to anyone for self-service registration.
     """
@@ -73,7 +73,8 @@ class OrganizationRegisterView(generics.CreateAPIView):
                 return Response(
                     {
                         'success': True,
-                        'message': 'Organization created successfully',
+                        'message': 'Organization created successfully. '
+                        'Please check your registered mail for verification',
                         'data': {
                             'organization': {
                                 'id': organization.id,
@@ -105,7 +106,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
             )
 
     def _get_subscription_plan(self, validated_data):
-        """Get subscription plan from request or use default trial plan"""
+        """Get subscription plan from request plan"""
         slug = validated_data.get('slug')
 
         if slug:
@@ -116,7 +117,6 @@ class OrganizationRegisterView(generics.CreateAPIView):
                 is_public=True
             )
         else:
-            # Use default trial plan
             # First try to get plan with slug 'trial'
             # If not found, get the first free plan (price = 0)
             # If still not found, raise error
@@ -195,51 +195,22 @@ class OrganizationRegisterView(generics.CreateAPIView):
     def _assign_subscription_plan(self, organization, plan, user_email):
         """
         Assign subscription plan to organization
-
-        - If plan is trial plan (price = 0): Start trial
-        - If plan is paid plan: Activate immediately (no trial)
         """
-        # Check if this is a trial plan (free or explicitly trial)
-        is_trial_plan = plan.price == 0 or plan.slug == 'trial'
+        # Activate paid plan immediately
+        # Note: In future verify payment first
+        SubscriptionService.subscribe(
+            organization=organization,
+            plan=plan,
+            performed_by_email=user_email
+        )
 
-        if is_trial_plan:
-            # Start trial
-            SubscriptionService.start_trial(
-                organization=organization,
-                plan=plan,
-                performed_by_email=user_email,
-                trial_days=plan.trial_days
-            )
-
-            return {
-                'plan': {
-                    'id': plan.id,
-                    'name': plan.name,
-                    'price': str(plan.price),
-                },
-                'status': 'trial',
-                'is_trial': True,
-                'trial_days': plan.trial_days,
-                'trial_end_date': organization.trial_end_date.isoformat(),
-                'message': f'Trial started with {plan.trial_days} days access'
-            }
-        else:
-            # Activate paid plan immediately
-            # Note: In future verify payment first
-            SubscriptionService.subscribe(
-                organization=organization,
-                plan=plan,
-                performed_by_email=user_email
-            )
-
-            return {
-                'plan': {
-                    'id': plan.id,
-                    'name': plan.name,
-                    'price': str(plan.price),
-                },
-                'status': 'active',
-                'is_trial': False,
-                'subscription_end_date': organization.subscription_end_date.isoformat(),
-                'message': f'Subscription activated for {plan.name}'
-            }
+        return {
+            'plan': {
+                'id': plan.id,
+                'name': plan.name,
+                'price': str(plan.price),
+            },
+            'status': 'active',
+            'subscription_end_date': organization.subscription_end_date.isoformat(),
+            'message': f'Subscription activated for {plan.name}'
+        }

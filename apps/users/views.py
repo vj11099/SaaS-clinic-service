@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from .models import User
 from .permissions import IsVerifiedUser
 from utils.registration_mail import send_verification_email
+from django.db import connection
+from django_tenants.utils import get_public_schema_name
 
 
 class RegisterUserView(generics.CreateAPIView):
@@ -20,19 +22,53 @@ class RegisterUserView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
+        """
+        Overridden create method to enforce subscription limits
+        before registering a new user.
+        """
+
+        tenant = connection.tenant
+
+        # 2. Check if we are in a valid tenant context (not public schema)
+        if tenant.schema_name != get_public_schema_name():
+
+            plan = getattr(tenant, 'subscription_plan', None)
+
+            if plan:
+                member_limit = getattr(plan, 'max_members', 1)
+
+                current_active_count = User.objects.filter(
+                    is_active=True).count()
+
+                if current_active_count >= member_limit:
+                    return Response(
+                        {
+                            "error": "Member limit reached",
+                            "message": (
+                                f"Your current plan ({plan.name}) allows a maximum of {
+                                    member_limit} "
+                                f"active members. You currently have {
+                                    current_active_count}."
+                            ),
+                            "current_count": current_active_count,
+                            "limit": member_limit
+                        },
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         send_verification_email(user, None)
 
         return Response({
-            "message": "Registration successful!",
+            "message": "Registration successful! Please check below email",
             "email": user.email
         }, status=status.HTTP_201_CREATED)
 
 
 class VerifyUserView(generics.UpdateAPIView):
-    allowed_methods = ['put']
+    # allowed_methods = ['put']
     permission_classes = [permissions.AllowAny]
     serializer_class = ResetPasswordSerializer
 
