@@ -1,8 +1,8 @@
-from django.utils import timezone
+# from datetime import timedelta
+# from django.utils import timezone
+# from ..organizations.models import Organization
 from django.db import transaction
-from datetime import timedelta
 from .models import SubscriptionPlan, SubscriptionHistory
-from ..organizations.models import Organization
 
 
 class SubscriptionService:
@@ -17,18 +17,6 @@ class SubscriptionService:
         ).order_by('sort_order', 'price')
 
     @staticmethod
-    def get_plan_by_id(plan_id):
-        """Get a specific plan by ID"""
-        try:
-            return SubscriptionPlan.objects.get(
-                id=plan_id,
-                is_active=True,
-                is_public=True
-            )
-        except SubscriptionPlan.DoesNotExist:
-            return None
-
-    @staticmethod
     def get_plan_by_slug(slug):
         """Get a specific plan by slug"""
         try:
@@ -39,42 +27,6 @@ class SubscriptionService:
             )
         except SubscriptionPlan.DoesNotExist:
             return None
-
-    @staticmethod
-    def _ensure_member_profile_exists(user):
-        """
-        Ensure user has a member profile in the current tenant schema.
-        If not, create one.
-
-        Args:
-            user: User instance
-
-        Returns:
-            Member instance
-        """
-        try:
-            return user.member_profile
-        except AttributeError:
-            # Member profile doesn't exist, create it
-            from ..members.models import Member
-
-            # Determine role based on user flags
-            if user.is_superuser or user.is_tenant_admin:
-                role = 'owner'
-            elif user.is_staff:
-                role = 'admin'
-            else:
-                role = 'member'
-
-            member = Member.objects.create(
-                user=user,
-                email=user.email,
-                phone=user.phone or '',
-                role=role,
-                status='active'
-            )
-
-            return member
 
     @staticmethod
     @transaction.atomic
@@ -91,10 +43,6 @@ class SubscriptionService:
         Returns:
             Organization instance
         """
-        # Ensure user has member profile if user object provided
-        if performed_by_user:
-            SubscriptionService._ensure_member_profile_exists(
-                performed_by_user)
 
         # Check member limit
         if not plan.can_accommodate_members(organization.current_member_count):
@@ -159,11 +107,6 @@ class SubscriptionService:
         if not organization.subscription_plan:
             raise ValueError("Organization has no active subscription plan")
 
-        # Ensure user has member profile if user object provided
-        if performed_by_user:
-            SubscriptionService._ensure_member_profile_exists(
-                performed_by_user)
-
         previous_plan = organization.subscription_plan
 
         # If switching plans during renewal
@@ -219,11 +162,6 @@ class SubscriptionService:
         """
         if not organization.subscription_plan:
             raise ValueError("Organization has no subscription to cancel")
-
-        # Ensure user has member profile if user object provided
-        if performed_by_user:
-            SubscriptionService._ensure_member_profile_exists(
-                performed_by_user)
 
         organization.cancel_subscription(reason)
 
@@ -281,36 +219,36 @@ class SubscriptionService:
 
         return history
 
-    @staticmethod
-    def get_expiring_subscriptions(days_threshold=7):
-        """
-        Get organizations with subscriptions expiring within threshold
-
-        Args:
-            days_threshold: Number of days to check ahead
-
-        Returns:
-            QuerySet of Organization instances
-        """
-        threshold_date = timezone.now() + timedelta(days=days_threshold)
-
-        return Organization.objects.filter(
-            subscription_status='active',
-            subscription_end_date__lte=threshold_date,
-            subscription_end_date__gte=timezone.now()
-        )
-
-    @staticmethod
-    def get_expired_subscriptions():
-        """
-        Get organizations with expired subscriptions
-
-        Returns:
-            QuerySet of Organization instances
-        """
-        now = timezone.now()
-
-        return Organization.objects.filter(
-            subscription_status__in=['active'],
-            subscription_end_date__lt=now
-        )
+#    @staticmethod
+#    def get_expiring_subscriptions(days_threshold=7):
+#        """
+#        Get organizations with subscriptions expiring within threshold
+#
+#        Args:
+#            days_threshold: Number of days to check ahead
+#
+#        Returns:
+#            QuerySet of Organization instances
+#        """
+#        threshold_date = timezone.now() + timedelta(days=days_threshold)
+#
+#        return Organization.objects.filter(
+#            subscription_status='active',
+#            subscription_end_date__lte=threshold_date,
+#            subscription_end_date__gte=timezone.now()
+#        )
+#
+#    @staticmethod
+#    def get_expired_subscriptions():
+#        """
+#        Get organizations with expired subscriptions
+#
+#        Returns:
+#            QuerySet of Organization instances
+#        """
+#        now = timezone.now()
+#
+#        return Organization.objects.filter(
+#            subscription_status__in=['active'],
+#            subscription_end_date__lt=now
+#        )

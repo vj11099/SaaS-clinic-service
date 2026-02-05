@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Organization
 from ..subscriptions.models import SubscriptionPlan
+from django.core.validators import RegexValidator
 
 
 class OrganizationRegisterSerializer(serializers.Serializer):
@@ -17,13 +18,15 @@ class OrganizationRegisterSerializer(serializers.Serializer):
     organization_schema_name = serializers.SlugField(
         max_length=100,
         required=True,
-        help_text="Unique schema name (e.g., 'acme')"
+        help_text="Unique schema name (e.g., 'acme')",
+        validators=[
+            RegexValidator(
+                regex=r'^[a-zA-Z0-9-]+$',
+                message="Schema name can only contain letters, numbers, and hyphens.",
+                code='invalid_schema_name'
+            )
+        ]
     )
-#    organization_domain_name = serializers.CharField(
-#        unique=True,
-#        max_length=100,
-#        help_text="Domain name of the organization"
-#    )
     contact_email = serializers.EmailField(
         required=True,
         help_text="Organization contact email"

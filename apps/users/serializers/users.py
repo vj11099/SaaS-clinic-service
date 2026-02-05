@@ -1,5 +1,5 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import User
+from ..models import User
 from rest_framework import serializers, validators
 from django.contrib.auth.password_validation import validate_password
 
@@ -43,17 +43,6 @@ class ResetPasswordSerializer(serializers.Serializer):
         required=True,
         validators=[validate_password]
     )
-
-#    class Meta:
-#        model = User
-#        fields = (
-#            'email', 'old_password', 'new_password'
-#        )
-#        extra_kwargs = {
-#            'email': {'required': True},
-#            'old_password': {'required': True},
-#            'new_password': {'required': True}
-#        }
 
 
 class LoginSerializer(TokenObtainPairSerializer):

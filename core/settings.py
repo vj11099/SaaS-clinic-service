@@ -30,7 +30,11 @@ SECRET_KEY = 'django-insecure-90=z3%cpo2co8tpn6(876q^$vpqbf3dbnyneehc405t1qvh(kq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.ngrok-free.app']
+
+CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app']
+
+# ALLOWED_HOSTS = []
 
 HOURS = 10
 MINUTES = 5
@@ -86,12 +90,12 @@ INSTALLED_APPS = list(SHARED_APPS) + \
 DOMAIN = os.getenv('DOMAIN', 'localhost')
 
 # Escape the domain for regex (turns "example.com" into "example\.com")
-ESCAPED_DOMAIN = re.escape(DOMAIN)
+# ESCAPED_DOMAIN = re.escape(DOMAIN)
 
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    # Matches http/https, any subdomain, and the escaped domain
-    fr"^https?://([^/]*\.)?{ESCAPED_DOMAIN}$",
-]
+# CORS_ALLOWED_ORIGIN_REGEXES = [
+#     # Matches http/https, any subdomain, and the escaped domain
+#     fr"^https?://([^/]*\.)?{ESCAPED_DOMAIN}$",
+# ]
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
@@ -105,7 +109,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     # 'apps.subscriptions.middleware.SubscriptionStatusUpdateMiddleware',
-    'apps.subscriptions.middleware.SubscriptionEnforcementMiddleware',
+    # 'apps.subscriptions.middleware.SubscriptionEnforcementMiddleware',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -245,11 +249,12 @@ SIMPLE_JWT = {
 
 # ROOT_URLCONF = 'config.urls_public'
 
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_HOST_USER = 'vishvamjoshi11099@gmail.com'
-# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_HOST_USER = 'vishvamjoshi11099@gmail.com'
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
 
 DEFAULT_FROM_EMAIL = 'noreply@yourapp.com'
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

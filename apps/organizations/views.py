@@ -49,7 +49,8 @@ class OrganizationRegisterView(generics.CreateAPIView):
 
                 # Create organization (tenant)
                 organization = self._create_organization(
-                    serializer.validated_data)
+                    serializer.validated_data
+                )
 
                 # Create domain
                 domain = self._create_domain(organization)
@@ -156,16 +157,16 @@ class OrganizationRegisterView(generics.CreateAPIView):
         """
         Create domain for tenant routing
         """
-        domain_name = os.getenv('DOMAIN')
+        primary_domain_name = os.getenv('DOMAIN')
 
-        if not domain_name:
+        if not primary_domain_name:
             raise Exception(
                 'DOMAIN environment variable not set. '
                 'Please add DOMAIN to your .env file.'
             )
 
         return Domain.objects.create(
-            domain=f"{organization.schema_name}.{domain_name}",
+            domain=f"{organization.schema_name}.{primary_domain_name}",
             tenant=organization,
             is_primary=True,
         )

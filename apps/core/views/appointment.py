@@ -1,14 +1,14 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
 from rest_framework import viewsets
-from rest_framework.permissions import DjangoModelPermissions
 from ..serializers.appointments import AppointmentSerializer
 from ..models.appointments import Appointment
+from ..permissions import IsOrganizationMember
 
 
 class AppointmentViews(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
-    permission_classes = [DjangoModelPermissions]
+    permission_classes = [IsOrganizationMember]
     required_permission = 'view_appointment'
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['patient', 'doctor']
@@ -28,10 +28,8 @@ class AppointmentViews(viewsets.ModelViewSet):
 
         return queryset
 
-
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-
         serializer = self.get_serializer(
             instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)

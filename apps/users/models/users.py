@@ -6,6 +6,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from .roles_and_permissions import Role, Permission
 
 
 class User(AbstractUser):
@@ -44,6 +45,85 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
+
+    roles = models.ManyToManyField(
+        Role,
+        through='UserRole',
+        related_name='users',
+        blank=True
+    )
+
+    def get_all_permissions(self):
+        """Get all permissions from all user's roles"""
+        # permissions = set()
+        # for user_role in self.user_roles.select_related('role').all():
+        #     if user_role.role.is_active and not user_role.role.is_deleted:
+        #         role_perms = user_role.role.get_permissions_list()
+        #         permissions.update(role_perms)
+        # return list(permissions)
+        #
+        # discarded due to N + 1
+
+        # Prefetch active roles with their active permissions
+        # active_role_prefetch = Prefetch(
+        #     'user_roles',
+        #     queryset=UserRole.objects.select_related('role').filter(
+        #         role__is_active=True,
+        #         role__is_deleted=False
+        #     ).prefetch_related(
+        #         Prefetch(
+        #             'role__permissions',
+        #             queryset=Permission.objects.filter(
+        #                 is_active=True,
+        #                 is_deleted=False
+        #             )
+        #         )
+        #     )
+        # )
+
+        # user_roles = self.user_roles.prefetch_related(active_role_prefetch)
+
+        # permissions = set()
+        # for user_role in user_roles:
+        #     permissions.update(
+        #         user_role.role.permissions.values_list('name', flat=True)
+        #     )
+
+        # return list(permissions)
+        # discarded due to reverse query
+
+        return list(Permission.objects.filter(
+            # 1. Filter the Permission itself
+            is_active=True,
+            is_deleted=False,
+
+            # 2. Join to Role (related_name='roles' in Role model)
+            roles__is_active=True,
+            roles__is_deleted=False,
+
+            # 3. Join to UserRole (related_name='role_users' in UserRole model)
+            # We filter by 'user' here to ensure we only get this user's roles
+            roles__user_roles__user=self,
+
+            # 4. (Optional) Filter the UserRole intermediate table for soft-deletes
+            roles__user_roles__is_active=True,
+            roles__user_roles__is_deleted=False
+
+        ).values_list('name', flat=True).distinct())
+
+    def has_permission(self, permission_name):
+        """Check if user has a specific permission"""
+        return permission_name in self.get_all_permissions()
+
+    def has_any_permission(self, permission_names):
+        """Check if user has any of the listed permissions"""
+        user_perms = set(self.get_all_permissions())
+        return bool(user_perms.intersection(set(permission_names)))
+
+    def has_all_permissions(self, permission_names):
+        """Check if user has all of the listed permissions"""
+        user_perms = set(self.get_all_permissions())
+        return set(permission_names).issubset(user_perms)
 
     class Meta:
         db_table = 'auth_user'

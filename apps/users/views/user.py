@@ -1,7 +1,6 @@
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.permissions import AllowAny
-from .serializers import (
+from ..serializers import (
     LoginSerializer, RegisterSerializer, UserSerializer,
     ResetPasswordSerializer
 )
@@ -9,8 +8,8 @@ from rest_framework import (
     permissions, generics, status, viewsets, exceptions
 )
 from rest_framework.response import Response
-from .models import User
-from .permissions import IsVerifiedUser
+from ..models import User
+from ..permissions.users import IsVerifiedUser
 from utils.registration_mail import send_verification_email
 from django.db import connection
 from django_tenants.utils import get_public_schema_name
@@ -29,36 +28,46 @@ class RegisterUserView(generics.CreateAPIView):
 
         tenant = connection.tenant
 
-        # 2. Check if we are in a valid tenant context (not public schema)
+        # Check if we are in a valid tenant context (not public schema)
         if tenant.schema_name != get_public_schema_name():
 
-            plan = getattr(tenant, 'subscription_plan', None)
+            if not tenant.can_add_member():
+                # Get details for error message
+                plan = tenant.subscription_plan
+                member_limit = tenant.get_member_limit()
+                current_count = tenant.current_member_count
 
-            if plan:
-                member_limit = getattr(plan, 'max_members', 1)
-
-                current_active_count = User.objects.filter(
-                    is_active=True).count()
-
-                if current_active_count >= member_limit:
-                    return Response(
-                        {
-                            "error": "Member limit reached",
-                            "message": (
-                                f"Your current plan ({plan.name}) allows a maximum of {
-                                    member_limit} "
-                                f"active members. You currently have {
-                                    current_active_count}."
-                            ),
-                            "current_count": current_active_count,
-                            "limit": member_limit
-                        },
-                        status=status.HTTP_403_FORBIDDEN
+                # Build appropriate error message
+                if not plan:
+                    error_message = "No active subscription plan found."
+                elif not tenant.is_subscription_active():
+                    error_message = (
+                        f"Your subscription has expired. "
+                        f"Please renew to add more members."
                     )
+                else:
+                    error_message = (
+                        f"Your current plan ({plan.name}) allows a maximum of "
+                        f"{member_limit if member_limit != -1 else 'unlimited'} "
+                        f"active members. You currently have {current_count}."
+                    )
+
+                return Response(
+                    {
+                        "error": "Cannot add member",
+                        "message": error_message,
+                        "current_count": current_count,
+                        "limit": member_limit
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        tenant.current_member_count += 1
+        tenant.save(update_fields=['current_member_count', 'updated_at'])
+
         send_verification_email(user, None)
 
         return Response({
@@ -68,9 +77,13 @@ class RegisterUserView(generics.CreateAPIView):
 
 
 class VerifyUserView(generics.UpdateAPIView):
-    # allowed_methods = ['put']
     permission_classes = [permissions.AllowAny]
     serializer_class = ResetPasswordSerializer
+
+    def patch(self, request, *args, **kwargs):
+        return Response({
+            "message": "Method unavailable, please use PUT",
+        }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def update(self, request):
         try:
@@ -147,7 +160,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class LoginView(TokenObtainPairView):
     serializer_class = LoginSerializer
-    permission_classes = (AllowAny,)
+    permission_classes = [IsVerifiedUser]
 
 
 class ResetPasswordView(generics.UpdateAPIView):
