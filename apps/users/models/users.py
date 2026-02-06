@@ -65,6 +65,7 @@ class User(AbstractUser):
         # discarded due to N + 1
 
         # Prefetch active roles with their active permissions
+        #
         # active_role_prefetch = Prefetch(
         #     'user_roles',
         #     queryset=UserRole.objects.select_related('role').filter(
@@ -80,17 +81,16 @@ class User(AbstractUser):
         #         )
         #     )
         # )
-
+        #
         # user_roles = self.user_roles.prefetch_related(active_role_prefetch)
-
+        #
         # permissions = set()
         # for user_role in user_roles:
         #     permissions.update(
         #         user_role.role.permissions.values_list('name', flat=True)
         #     )
-
         # return list(permissions)
-
+        #
         # discarded due to possible reverse query
 
         return list(Permission.objects.filter(
@@ -98,17 +98,17 @@ class User(AbstractUser):
             is_active=True,
             is_deleted=False,
 
-            # 2. Join to Role (related_name='roles' in Role model)
-            roles__is_active=True,
-            roles__is_deleted=False,
+            # 2. Join to Role (related_name='roles_permission' in Permission model)
+            roles_permission__is_active=True,
+            roles_permission__is_deleted=False,
 
-            # 3. Join to UserRole (related_name='role_users' in UserRole model)
+            # 3. Join to UserRole (related_name='user_roles' in Role model)
             # We filter by 'user' here to ensure we only get this user's roles
-            roles__user_roles__user=self,
+            roles_permission__user_roles__user=self,
 
             # 4. (Optional) Filter the UserRole intermediate table for soft-deletes
-            roles__user_roles__is_active=True,
-            roles__user_roles__is_deleted=False
+            roles_permission__user_roles__is_active=True,
+            roles_permission__user_roles__is_deleted=False
 
         ).values_list('name', flat=True).distinct())
 

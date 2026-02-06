@@ -76,17 +76,17 @@ class IsTenantAdmin(permissions.BasePermission):
         return request.user.is_tenant_admin
 
 
-class IsSystemRole(permissions.BasePermission):
-    """
-    Custom permission to prevent modification of system roles.
-    Used in object-level permissions.
-    """
-
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.READONLY_METHODS:
-            return True
-
-        return not obj.is_system_role
+# class IsSystemRole(permissions.BasePermission):
+#     """
+#     Custom permission to prevent modification of system roles.
+#     Used in object-level permissions.
+#     """
+#
+#     def has_object_permission(self, request, view, obj):
+#         if request.method in permissions.READONLY_METHODS:
+#             return True
+#
+#         return not obj.is_system_role
 
 
 class CanManageRoles(permissions.BasePermission):

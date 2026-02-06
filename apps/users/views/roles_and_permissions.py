@@ -1,7 +1,10 @@
 from rest_framework import (
-    viewsets, serializers, status, permissions as drf_permissions
+    viewsets, serializers, status
 )
-# from apps.permissions import CanManagePermissions, CanManageRoles, CanAssignRoles
+# here
+# from rich import inspect
+from apps.permissions import (
+    CanManagePermissions, CanManageRoles, CanAssignRoles)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -32,7 +35,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
 
     queryset = Permission.objects.filter(is_deleted=False)
     serializer_class = PermissionSerializer
-    permission_classes = [drf_permissions.IsAuthenticated]
+    permission_classes = [CanManagePermissions]
 
     def get_queryset(self):
         """Filter queryset based on query parameters"""
@@ -55,6 +58,9 @@ class PermissionViewSet(viewsets.ModelViewSet):
         instance.is_deleted = True
         instance.is_active = False
         instance.save(update_fields=['is_deleted', 'is_active', 'updated_at'])
+        return Response({
+            'message': 'Permission deleted successfully'
+        })
 
     @action(detail=True, methods=['post'])
     def restore(self, request, pk=None):
@@ -92,7 +98,8 @@ class RoleViewSet(viewsets.ModelViewSet):
     assign_users: Assign users to a role
     remove_users: Remove users from a role
     """
-    permission_classes = [drf_permissions.IsAuthenticated]
+
+    permission_classes = [CanManageRoles]
 
     def get_queryset(self):
         """Get queryset with optimized queries"""
@@ -128,8 +135,13 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
+        # print(inspect(self, methods=True))
+        if self.action in ['assign_permissions', 'revoke_permissions']:
+            return RolePermissionSerializer
+
         if self.action == 'retrieve':
             return RoleWithPermissionsDetailSerializer
+
         elif self.action in ['create', 'update', 'partial_update']:
             return RoleCreateUpdateSerializer
         return RoleSerializer
@@ -212,10 +224,10 @@ class RoleViewSet(viewsets.ModelViewSet):
                 'error': 'Role not found'
             }, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=['post'], url_path='remove-permissions')
-    def remove_permissions(self, request):
+    @action(detail=False, methods=['post'], url_path='revoke-permissions')
+    def revoke_permissions(self, request):
         """
-        Remove permissions from a role
+        Revoke permissions from a role
         Body: {
             "role_id": 1,
             "permission_ids": [1, 2, 3]
@@ -255,7 +267,7 @@ class UserRoleViewSet(viewsets.ViewSet):
     """
     ViewSet for managing user-role assignments
     """
-    permission_classes = [drf_permissions.IsAuthenticated]
+    permission_classes = [CanAssignRoles]
 
     @action(detail=False, methods=['post'], url_path='assign-roles')
     def assign_roles(self, request):
@@ -292,7 +304,9 @@ class UserRoleViewSet(viewsets.ViewSet):
                         user_role.is_deleted = False
                         user_role.is_active = True
                         user_role.save(
-                            update_fields=['is_deleted', 'is_active', 'updated_at'])
+                            update_fields=['is_deleted',
+                                           'is_active', 'updated_at']
+                        )
                     user_roles.append(user_role)
 
                 user.refresh_from_db()
@@ -376,7 +390,11 @@ class UserRoleViewSet(viewsets.ViewSet):
                 'error': 'User not found or inactive'
             }, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=['get'], url_path='role/(?P<role_id>[^/.]+)/users')
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='role/(?P<role_id>[^/.]+)/users'
+    )
     def get_role_users(self, request, role_id=None):
         """Get all users assigned to a specific role"""
         try:

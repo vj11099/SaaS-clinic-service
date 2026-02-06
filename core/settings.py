@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-90=z3%cpo2co8tpn6(876q^$vpqbf3dbnyneehc405t1qvh(kq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.ngrok-free.app']
+ALLOWED_HOSTS = ['.localhost', '127.0.0.1', '.ngrok-free.app']
 
 CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app']
 
@@ -52,6 +52,7 @@ SHARED_APPS = [
     'apps.users',
     'apps.organizations',
     'apps.subscriptions',
+    'silk',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -78,7 +79,7 @@ TENANT_APPS = (
 
     # Tenant-specific apps
     'apps.users',  # Tenant-specific user management
-    'apps.core',
+    'apps.core',  # Patients, Appointments
 )
 
 
@@ -99,10 +100,11 @@ DOMAIN = os.getenv('DOMAIN', 'localhost')
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.common.CommonMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -150,6 +152,7 @@ DATABASES = {
         'HOST': tmpPostgres.hostname,
         'PORT': 5432,
         'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
+        'CONN_MAX_AGE': 120
     }
 }
 

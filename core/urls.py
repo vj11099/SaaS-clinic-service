@@ -55,9 +55,12 @@ urlpatterns = [
         ),
         name='schema-redoc'
     ),
-    path('admin/', admin.site.urls),
-    path('auth/', include('apps.users.urls')),
-    path('organization/', include('apps.organizations.urls')),
-    path('clinic/', include('apps.core.urls')),
-    path('subscriptions/', include('apps.subscriptions.urls'))
+    path('api/admin/', admin.site.urls),
+    path('api/auth/', include('apps.users.urls')),
+    path('api/organization/', include('apps.organizations.urls')),
+    path('api/clinic/', include('apps.core.urls')),
+    path('api/subscriptions/', include('apps.subscriptions.urls')),
+
+
+    path('silk/', include('silk.urls', namespace='silk')),
 ]

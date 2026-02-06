@@ -11,7 +11,9 @@ class PermissionSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'is_active',
             'is_deleted', 'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'is_active', 'is_deleted'
+        )
         extra_kwargs = {
             'name': {'required': True},
         }
@@ -73,9 +75,9 @@ class RoleCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = (
-            'id', 'name', 'description', 'is_active', 'is_deleted'
+            'id', 'name', 'description'
         )
-        read_only_fields = ('id',)
+        read_only_fields = ['id', 'is_active', 'is_deleted']
         extra_kwargs = {
             'name': {'required': True},
         }
@@ -113,7 +115,8 @@ class RolePermissionSerializer(serializers.Serializer):
         """Validate that all permissions exist and are not deleted"""
         if not value:
             raise serializers.ValidationError(
-                "At least one permission is required.")
+                "At least one permission is required."
+            )
 
         existing_permissions = Permission.objects.filter(
             id__in=value,
@@ -195,7 +198,7 @@ class RoleWithPermissionsDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = (
-            'id', 'name', 'description', 'permissions', 'users_count',
+            'id', 'name', 'description', 'users_count', 'permissions',
             'is_system_role', 'is_active', 'is_deleted',
             'created_at', 'updated_at'
         )
@@ -203,7 +206,7 @@ class RoleWithPermissionsDetailSerializer(serializers.ModelSerializer):
 
     def get_users_count(self, obj):
         """Get count of users with this role"""
-        return obj.role_users.filter(
+        return obj.user_roles.filter(
             user__is_active=True,
             is_deleted=False
         ).count()
