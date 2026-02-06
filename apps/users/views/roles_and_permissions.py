@@ -1,6 +1,7 @@
 from rest_framework import (
     viewsets, serializers, status, permissions as drf_permissions
 )
+# from apps.permissions import CanManagePermissions, CanManageRoles, CanAssignRoles
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
@@ -37,12 +38,10 @@ class PermissionViewSet(viewsets.ModelViewSet):
         """Filter queryset based on query parameters"""
         queryset = super().get_queryset()
 
-        # Filter by active status
         is_active = self.request.query_params.get('is_active', None)
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
 
-        # Search by name or description
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
@@ -99,7 +98,6 @@ class RoleViewSet(viewsets.ModelViewSet):
         """Get queryset with optimized queries"""
         queryset = Role.objects.filter(is_deleted=False)
 
-        # Prefetch permissions for list/retrieve
         if self.action in ['list', 'retrieve']:
             queryset = queryset.prefetch_related(
                 Prefetch(
@@ -111,19 +109,16 @@ class RoleViewSet(viewsets.ModelViewSet):
                 )
             )
 
-        # Filter by active status
         is_active = self.request.query_params.get('is_active', None)
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
 
-        # Search by name or description
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
                 Q(name__icontains=search) | Q(description__icontains=search)
             )
 
-        # Filter system roles
         include_system = self.request.query_params.get(
             'include_system', 'true')
         if include_system.lower() == 'false':
@@ -190,7 +185,6 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 )
 
-                # Create RolePermission entries
                 role_permissions = []
                 for permission in permissions:
                     role_perm, created = RolePermission.objects.get_or_create(
@@ -199,14 +193,12 @@ class RoleViewSet(viewsets.ModelViewSet):
                         defaults={'is_active': True, 'is_deleted': False}
                     )
                     if not created and role_perm.is_deleted:
-                        # Restore if previously deleted
                         role_perm.is_deleted = False
                         role_perm.is_active = True
                         role_perm.save(
                             update_fields=['is_deleted', 'is_active', 'updated_at'])
                     role_permissions.append(role_perm)
 
-                # Refresh role to get updated permissions
                 role.refresh_from_db()
                 serializer = RoleWithPermissionsDetailSerializer(role)
 
@@ -239,14 +231,12 @@ class RoleViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 role = Role.objects.get(id=role_id, is_deleted=False)
 
-                # Soft delete RolePermission entries
                 deleted_count = RolePermission.objects.filter(
                     role=role,
                     permission_id__in=permission_ids,
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                # Refresh role to get updated permissions
                 role.refresh_from_db()
                 serializer = RoleWithPermissionsDetailSerializer(role)
 
@@ -291,7 +281,6 @@ class UserRoleViewSet(viewsets.ViewSet):
                     is_active=True
                 )
 
-                # Create UserRole entries
                 user_roles = []
                 for role in roles:
                     user_role, created = UserRole.objects.get_or_create(
@@ -300,14 +289,12 @@ class UserRoleViewSet(viewsets.ViewSet):
                         defaults={'is_active': True, 'is_deleted': False}
                     )
                     if not created and user_role.is_deleted:
-                        # Restore if previously deleted
                         user_role.is_deleted = False
                         user_role.is_active = True
                         user_role.save(
                             update_fields=['is_deleted', 'is_active', 'updated_at'])
                     user_roles.append(user_role)
 
-                # Refresh user to get updated roles
                 user.refresh_from_db()
                 serializer = UserWithRolesSerializer(user)
 
@@ -340,14 +327,12 @@ class UserRoleViewSet(viewsets.ViewSet):
             with transaction.atomic():
                 user = User.objects.get(id=user_id, is_active=True)
 
-                # Soft delete UserRole entries
                 deleted_count = UserRole.objects.filter(
                     user=user,
                     role_id__in=role_ids,
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                # Refresh user to get updated roles
                 user.refresh_from_db()
                 serializer = UserWithRolesSerializer(user)
 

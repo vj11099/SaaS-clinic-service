@@ -1,6 +1,5 @@
 from django.db import models
 from utils.abstract_models import BaseAuditTrailModel
-# from .users import User
 
 
 class Permission(BaseAuditTrailModel):

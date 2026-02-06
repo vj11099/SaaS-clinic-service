@@ -90,7 +90,8 @@ class User(AbstractUser):
         #     )
 
         # return list(permissions)
-        # discarded due to reverse query
+
+        # discarded due to possible reverse query
 
         return list(Permission.objects.filter(
             # 1. Filter the Permission itself

@@ -71,7 +71,7 @@ class TenantAwareManager(TenantManager):
     def with_common_relations(self):
         """
         Override in child managers to define common select_related/prefetch_related.
-        This prevents N+1 queries for commonly accessed relations.
+        This prevents N+2 queries for commonly accessed relations.
         """
         return self.get_queryset()
 
