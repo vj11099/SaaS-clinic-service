@@ -16,37 +16,37 @@ class IsOrganizationOwnerOrAdmin(permissions.BasePermission):
             return False
 
         # Get organization from request
-        organization = getattr(request, 'tenant', None) or getattr(
-            request, 'organization', None)
+        # organization = getattr(request, 'tenant', None) or getattr(
+        #     request, 'organization', None)
 
-        if not organization:
-            return False
+        # if not organization:
+        #     return False
 
-        # Check if user is owner or admin
-        # You'll need to implement this based on your membership model
-        # This is a placeholder implementation
-        return self._is_owner_or_admin(request.user, organization)
+        # # Check if user is owner or admin
+        # # You'll need to implement this based on your membership model
+        # # This is a placeholder implementation
+        # return self._is_owner_or_admin(request.user, organization)
 
-    def _is_owner_or_admin(self, user, organization):
-        """
-        Check if user is owner or admin of organization
+    # def _is_owner_or_admin(self, user, organization):
+    #     """
+    #     Check if user is owner or admin of organization
 
-        Implement this based on your membership model
-        For example:
+    #     Implement this based on your membership model
+    #     For example:
 
-        from memberships.models import Membership
+    #     from memberships.models import Membership
 
-        try:
-            membership = Membership.objects.get(
-                user=user,
-                organization=organization
-            )
-            return membership.role in ['owner', 'admin']
-        except Membership.DoesNotExist:
-            return False
-        """
-        # Placeholder - implement based on your membership model
-        return True
+    #     try:
+    #         membership = Membership.objects.get(
+    #             user=user,
+    #             organization=organization
+    #         )
+    #         return membership.role in ['owner', 'admin']
+    #     except Membership.DoesNotExist:
+    #         return False
+    #     """
+    #     # Placeholder - implement based on your membership model
+    #     return True
 
 
 class CanManageSubscription(permissions.BasePermission):

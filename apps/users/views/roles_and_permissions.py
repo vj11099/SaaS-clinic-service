@@ -1,8 +1,6 @@
 from rest_framework import (
     viewsets, serializers, status
 )
-# here
-# from rich import inspect
 from apps.permissions import (
     CanManagePermissions, CanManageRoles, CanAssignRoles)
 from rest_framework.decorators import action
@@ -17,6 +15,7 @@ from ..serializers.roles_and_permissions import (
     RolePermissionSerializer,
     UserRoleSerializer,
     UserWithRolesSerializer,
+    PermissionListSerializer,
     RoleWithPermissionsDetailSerializer
 )
 
@@ -58,9 +57,14 @@ class PermissionViewSet(viewsets.ModelViewSet):
         instance.is_deleted = True
         instance.is_active = False
         instance.save(update_fields=['is_deleted', 'is_active', 'updated_at'])
+
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to return proper response"""
+        instance = self.get_object()
+        self.perform_destroy(instance)
         return Response({
             'message': 'Permission deleted successfully'
-        })
+        }, status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
     def restore(self, request, pk=None):
@@ -94,9 +98,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     partial_update: Update a role (partial)
     destroy: Soft delete a role
     assign_permissions: Assign permissions to a role
-    remove_permissions: Remove permissions from a role
-    assign_users: Assign users to a role
-    remove_users: Remove users from a role
+    revoke_permissions: Revoke permissions from a role
     """
 
     permission_classes = [CanManageRoles]
@@ -106,13 +108,19 @@ class RoleViewSet(viewsets.ModelViewSet):
         queryset = Role.objects.filter(is_deleted=False)
 
         if self.action in ['list', 'retrieve']:
+            # FIX #1: CRITICAL BUG - Filter through RolePermission table to exclude soft-deleted relationships
+            # This was causing revoked permissions to still appear
             queryset = queryset.prefetch_related(
                 Prefetch(
                     'permissions',
                     queryset=Permission.objects.filter(
                         is_active=True,
-                        is_deleted=False
-                    )
+                        is_deleted=False,
+                        # CRITICAL: Filter the through table to exclude soft-deleted relationships
+                        rolepermission__is_active=True,
+                        rolepermission__is_deleted=False
+                        # Use distinct to avoid duplicates from through table joins
+                    ).distinct()
                 )
             )
 
@@ -135,7 +143,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
-        # print(inspect(self, methods=True))
+
+        if self.action == 'restore':
+            return PermissionListSerializer
+
         if self.action in ['assign_permissions', 'revoke_permissions']:
             return RolePermissionSerializer
 
@@ -154,6 +165,9 @@ class RoleViewSet(viewsets.ModelViewSet):
         instance.is_deleted = True
         instance.is_active = False
         instance.save(update_fields=['is_deleted', 'is_active', 'updated_at'])
+        return Response({
+            'message': 'Role deleted successfully'
+        }, status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
     def restore(self, request, pk=None):
@@ -197,25 +211,50 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 )
 
-                role_permissions = []
+                # FIX #2: Validate that we found all requested permissions
+                if len(permissions) != len(permission_ids):
+                    found_ids = set(permissions.values_list('id', flat=True))
+                    missing_ids = set(permission_ids) - found_ids
+                    raise serializers.ValidationError(
+                        f"Permissions not found: {
+                            ', '.join(map(str, missing_ids))}"
+                    )
+
+                assigned_count = 0
                 for permission in permissions:
                     role_perm, created = RolePermission.objects.get_or_create(
                         role=role,
                         permission=permission,
                         defaults={'is_active': True, 'is_deleted': False}
                     )
-                    if not created and role_perm.is_deleted:
+                    if created:
+                        assigned_count += 1
+                    elif role_perm.is_deleted:
+                        # Restore previously deleted relationship
                         role_perm.is_deleted = False
                         role_perm.is_active = True
                         role_perm.save(
                             update_fields=['is_deleted', 'is_active', 'updated_at'])
-                    role_permissions.append(role_perm)
+                        assigned_count += 1
 
-                role.refresh_from_db()
+                # FIX #3: Re-fetch with proper prefetch instead of refresh_from_db()
+                # refresh_from_db() doesn't reload M2M relationships properly
+                role = Role.objects.prefetch_related(
+                    Prefetch(
+                        'permissions',
+                        queryset=Permission.objects.filter(
+                            is_active=True,
+                            is_deleted=False,
+                            rolepermission__is_active=True,
+                            rolepermission__is_deleted=False
+                        ).distinct()
+                    )
+                ).get(id=role_id)
+
                 serializer = RoleWithPermissionsDetailSerializer(role)
 
                 return Response({
-                    'message': f'{len(permissions)} permission(s) assigned to role successfully',
+                    'message': f'{assigned_count} permission(s) assigned to role successfully',
                     'role': serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -223,6 +262,10 @@ class RoleViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': 'Role not found'
             }, status=status.HTTP_404_NOT_FOUND)
+        except serializers.ValidationError as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], url_path='revoke-permissions')
     def revoke_permissions(self, request):
@@ -249,11 +292,23 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                role.refresh_from_db()
+                # FIX #4: Re-fetch with proper prefetch instead of refresh_from_db()
+                role = Role.objects.prefetch_related(
+                    Prefetch(
+                        'permissions',
+                        queryset=Permission.objects.filter(
+                            is_active=True,
+                            is_deleted=False,
+                            rolepermission__is_active=True,
+                            rolepermission__is_deleted=False
+                        ).distinct()
+                    )
+                ).get(id=role_id)
+
                 serializer = RoleWithPermissionsDetailSerializer(role)
 
                 return Response({
-                    'message': f'{deleted_count} permission(s) removed from role successfully',
+                    'message': f'{deleted_count} permission(s) revoked from role successfully',
                     'role': serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -266,17 +321,39 @@ class RoleViewSet(viewsets.ModelViewSet):
 class UserRoleViewSet(viewsets.ViewSet):
     """
     ViewSet for managing user-role assignments
+
+    Available actions:
+    - assign_roles: Assign roles to a user
+    - revoke_roles: Revoke roles from a user
+    - get_user_roles: Get a user with their roles and permissions
+    - get_role_users: Get all users assigned to a specific role
     """
     permission_classes = [CanAssignRoles]
+
+    def get_serializer_class(self):
+        if self.action in ['assign_roles', 'revoke_roles']:
+            return UserRoleSerializer
+        return UserWithRolesSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        serializer_class = self.get_serializer_class()
+        kwargs.setdefault('context', self.get_serializer_context())
+        return serializer_class(*args, **kwargs)
+
+    def get_serializer_context(self):
+        """
+        Extra context provided to the serializer class.
+        """
+        return {
+            'request': self.request,
+            'format': self.format_kwarg,
+            'view': self
+        }
 
     @action(detail=False, methods=['post'], url_path='assign-roles')
     def assign_roles(self, request):
         """
         Assign roles to a user
-        Body: {
-            "user_id": 1,
-            "role_ids": [1, 2, 3]
-        }
         """
         serializer = UserRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -293,27 +370,61 @@ class UserRoleViewSet(viewsets.ViewSet):
                     is_active=True
                 )
 
-                user_roles = []
+                # Validate that we found all requested roles
+                if len(roles) != len(role_ids):
+                    found_ids = set(roles.values_list('id', flat=True))
+                    missing_ids = set(role_ids) - found_ids
+                    raise serializers.ValidationError(
+                        f"Roles not found: {', '.join(map(str, missing_ids))}"
+                    )
+
+                assigned_count = 0
                 for role in roles:
                     user_role, created = UserRole.objects.get_or_create(
                         user=user,
                         role=role,
                         defaults={'is_active': True, 'is_deleted': False}
                     )
-                    if not created and user_role.is_deleted:
+                    if created:
+                        assigned_count += 1
+                    elif user_role.is_deleted:
+                        # Restore previously deleted relationship
                         user_role.is_deleted = False
                         user_role.is_active = True
                         user_role.save(
                             update_fields=['is_deleted',
                                            'is_active', 'updated_at']
                         )
-                    user_roles.append(user_role)
+                        assigned_count += 1
 
-                user.refresh_from_db()
+                # Re-fetch user with proper prefetch
+                user = User.objects.prefetch_related(
+                    Prefetch(
+                        'roles',
+                        queryset=Role.objects.filter(
+                            is_active=True,
+                            is_deleted=False,
+                            # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
+                            user_roles__is_active=True,
+                            user_roles__is_deleted=False
+                        ).prefetch_related(
+                            Prefetch(
+                                'permissions',
+                                queryset=Permission.objects.filter(
+                                    is_active=True,
+                                    is_deleted=False,
+                                    rolepermission__is_active=True,
+                                    rolepermission__is_deleted=False
+                                ).distinct()
+                            )
+                        ).distinct()
+                    )
+                ).get(id=user_id)
+
                 serializer = UserWithRolesSerializer(user)
 
                 return Response({
-                    'message': f'{len(roles)} role(s) assigned to user successfully',
+                    'message': f'{assigned_count} role(s) assigned to user successfully',
                     'user': serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -321,15 +432,15 @@ class UserRoleViewSet(viewsets.ViewSet):
             return Response({
                 'error': 'User not found or inactive'
             }, status=status.HTTP_404_NOT_FOUND)
+        except serializers.ValidationError as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], url_path='remove-roles')
-    def remove_roles(self, request):
+    @action(detail=False, methods=['post'], url_path='revoke-roles')
+    def revoke_roles(self, request):
         """
-        Remove roles from a user
-        Body: {
-            "user_id": 1,
-            "role_ids": [1, 2, 3]
-        }
+        Revoke roles from a user
         """
         serializer = UserRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -347,11 +458,34 @@ class UserRoleViewSet(viewsets.ViewSet):
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                user.refresh_from_db()
+                # Re-fetch user with proper prefetch
+                user = User.objects.prefetch_related(
+                    Prefetch(
+                        'roles',
+                        queryset=Role.objects.filter(
+                            is_active=True,
+                            is_deleted=False,
+                            # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
+                            user_roles__is_active=True,
+                            user_roles__is_deleted=False
+                        ).prefetch_related(
+                            Prefetch(
+                                'permissions',
+                                queryset=Permission.objects.filter(
+                                    is_active=True,
+                                    is_deleted=False,
+                                    rolepermission__is_active=True,
+                                    rolepermission__is_deleted=False
+                                ).distinct()
+                            )
+                        ).distinct()
+                    )
+                ).get(id=user_id)
+
                 serializer = UserWithRolesSerializer(user)
 
                 return Response({
-                    'message': f'{deleted_count} role(s) removed from user successfully',
+                    'message': f'{deleted_count} role(s) revoked from user successfully',
                     'user': serializer.data
                 }, status=status.HTTP_200_OK)
 
@@ -362,23 +496,33 @@ class UserRoleViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='user/(?P<user_id>[^/.]+)')
     def get_user_roles(self, request, user_id=None):
-        """Get a user with their roles and permissions"""
+        """
+        Get a user with their roles and permissions
+
+        Path parameters:
+        - user_id: ID of the user
+        """
         try:
             user = User.objects.prefetch_related(
                 Prefetch(
                     'roles',
                     queryset=Role.objects.filter(
                         is_active=True,
-                        is_deleted=False
+                        is_deleted=False,
+                        # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
+                        user_roles__is_active=True,
+                        user_roles__is_deleted=False
                     ).prefetch_related(
                         Prefetch(
                             'permissions',
                             queryset=Permission.objects.filter(
                                 is_active=True,
-                                is_deleted=False
-                            )
+                                is_deleted=False,
+                                rolepermission__is_active=True,
+                                rolepermission__is_deleted=False
+                            ).distinct()
                         )
-                    )
+                    ).distinct()
                 )
             ).get(id=user_id, is_active=True)
 
@@ -396,15 +540,45 @@ class UserRoleViewSet(viewsets.ViewSet):
         url_path='role/(?P<role_id>[^/.]+)/users'
     )
     def get_role_users(self, request, role_id=None):
-        """Get all users assigned to a specific role"""
+        """
+        Get all users assigned to a specific role
+
+        Path parameters:
+        - role_id: ID of the role
+        """
         try:
             role = Role.objects.get(id=role_id, is_deleted=False)
 
+            # Query users through the UserRole table
+            # Use user_roles (the related_name from UserRole.user field)
             users = User.objects.filter(
                 user_roles__role=role,
                 user_roles__is_deleted=False,
+                user_roles__is_active=True,
                 is_active=True
-            ).distinct()
+            ).distinct().prefetch_related(
+                Prefetch(
+                    'roles',
+                    queryset=Role.objects.filter(
+                        is_active=True,
+                        is_deleted=False,
+                        # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
+                        # NOT userrole__ (lowercase) - Django is case-sensitive!
+                        user_roles__is_active=True,
+                        user_roles__is_deleted=False
+                    ).prefetch_related(
+                        Prefetch(
+                            'permissions',
+                            queryset=Permission.objects.filter(
+                                is_active=True,
+                                is_deleted=False,
+                                rolepermission__is_active=True,
+                                rolepermission__is_deleted=False
+                            ).distinct()
+                        )
+                    ).distinct()
+                )
+            )
 
             serializer = UserWithRolesSerializer(users, many=True)
 
@@ -423,5 +597,5 @@ class UserRoleViewSet(viewsets.ViewSet):
 
         except Role.DoesNotExist:
             return Response({
-                'error': 'Role not found'},
-                status=status.HTTP_404_NOT_FOUND)
+                'error': 'Role not found'
+            }, status=status.HTTP_404_NOT_FOUND)

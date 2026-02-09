@@ -4,6 +4,7 @@ from rest_framework import viewsets
 from ..serializers.appointments import AppointmentSerializer
 from ..models.appointments import Appointment
 from ..permissions import IsOrganizationMember
+from apps.permissions import require_permissions
 
 
 class AppointmentViews(viewsets.ModelViewSet):
@@ -13,6 +14,7 @@ class AppointmentViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['patient', 'doctor']
 
+    @require_permissions('appointments.view')
     def get_queryset(self):
         queryset = Appointment.objects.select_related(
             'patient', 'doctor', 'created_by', 'updated_by'
@@ -28,6 +30,7 @@ class AppointmentViews(viewsets.ModelViewSet):
 
         return queryset
 
+    @require_permissions('appointments.update')
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(

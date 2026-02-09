@@ -37,6 +37,7 @@ class User(AbstractUser):
     password_verified = models.BooleanField(default=False)
     previous_passwords = ArrayField(
         models.CharField(max_length=128),
+        unique=True,
         size=3,
         null=True
     )

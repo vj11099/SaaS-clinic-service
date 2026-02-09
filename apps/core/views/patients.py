@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.db import IntegrityError
+from apps.permissions import require_permissions
 
 
 class PatientViews(viewsets.ModelViewSet):
@@ -17,6 +18,7 @@ class PatientViews(viewsets.ModelViewSet):
     filterset_class = PatientFilter
     queryset = Patient.objects.all()
 
+    @require_permissions('patients.create')
     def create(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -32,6 +34,7 @@ class PatientViews(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @require_permissions('patients.update')
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(
@@ -41,6 +44,7 @@ class PatientViews(viewsets.ModelViewSet):
         self.perform_update(serializer)
         return Response(serializer.data)
 
+    @require_permissions('patients.delete')
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()

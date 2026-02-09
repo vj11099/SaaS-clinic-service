@@ -1,5 +1,6 @@
 from .user import (
-    RegisterUserView, VerifyUserView, UserViewSet, LoginView, ResetPasswordView
+    RegisterUserView, VerifyUserView, UserViewSet, LoginView, ResetPasswordView,
+    LogoutView
 )
 
 __all__ = [
@@ -7,5 +8,6 @@ __all__ = [
     'VerifyUserView',
     'UserViewSet',
     'LoginView',
-    'ResetPasswordView'
+    'ResetPasswordView',
+    'LogoutView'
 ]

@@ -1,7 +1,9 @@
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from ..models import User
+from django.db import connection
 from rest_framework import serializers, validators
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import authenticate
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -46,19 +48,55 @@ class ResetPasswordSerializer(serializers.Serializer):
 
 
 class LoginSerializer(TokenObtainPairSerializer):
+    username_field = 'username_or_email'
+
     @classmethod
     def get_token(cls, user):
-        # Create the standard token
         token = super().get_token(user)
 
-        token['username'] = user.username
-        token['email'] = user.email
+        token['schema'] = connection.schema_name
 
         return token
 
     def validate(self, attrs):
-        # Standard validation (checks password)
-        data = super().validate(attrs)
+        username_or_email = attrs.get('username_or_email')
+        password = attrs.get('password')
+
+        user = authenticate(
+            request=self.context.get('request'),
+            username=username_or_email,
+            password=password
+        )
+
+        if user is None:
+            try:
+                user_obj = User.objects.get(email=username_or_email)
+                user = authenticate(
+                    request=self.context.get('request'),
+                    username=user_obj.username,
+                    password=password
+                )
+            except User.DoesNotExist:
+                user = None
+
+        if not user:
+            raise serializers.ValidationError("Invalid credentials")
+
+        if not user.password_verified and not user.is_active:
+            raise serializers.ValidationError(
+                "Account disabled or not verified")
+
+        refresh = self.get_token(user)
+
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': {
+                'username': user.username,
+                'email': user.email
+            }
+        }
+
         return data
 
 

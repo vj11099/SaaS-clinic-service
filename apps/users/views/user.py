@@ -4,8 +4,10 @@ from ..serializers import (
     LoginSerializer, RegisterSerializer, UserSerializer,
     ResetPasswordSerializer
 )
+from rest_framework_simplejwt.tokens import RefreshToken
+from apps.permissions import HasPermission
 from rest_framework import (
-    permissions, generics, status, viewsets, exceptions
+    permissions, generics, status, viewsets, exceptions, views
 )
 from rest_framework.response import Response
 from ..models import User
@@ -13,12 +15,14 @@ from ..permissions.users import IsVerifiedUser
 from utils.registration_mail import send_verification_email
 from django.db import connection
 from django_tenants.utils import get_public_schema_name
+from rest_framework_simplejwt.exceptions import TokenError
 
 
 class RegisterUserView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasPermission]
+    required_permission = 'users.create'
 
     def create(self, request, *args, **kwargs):
         """
@@ -160,7 +164,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class LoginView(TokenObtainPairView):
     serializer_class = LoginSerializer
-    permission_classes = [IsVerifiedUser]
+    permission_classes = [permissions.AllowAny]
 
 
 class ResetPasswordView(generics.UpdateAPIView):
@@ -208,3 +212,38 @@ class ResetPasswordView(generics.UpdateAPIView):
             return Response({
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutView(views.APIView):
+    # This permission class requires a valid Access Token in the header
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+
+        if not refresh_token:
+            return Response(
+                {"error": "Refresh token is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            return Response(
+                {"message": "Logout successful"},
+                status=status.HTTP_205_RESET_CONTENT
+            )
+
+        except TokenError:
+            # TokenError handles expired or invalid tokens specifically
+            return Response(
+                {"error": "Token is invalid or expired"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": "An error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
