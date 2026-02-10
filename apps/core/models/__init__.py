@@ -3,5 +3,5 @@ from .appointments import Appointment
 
 __all__ = [
     'Patient',
-    'Appointment'
+    'Appointment',
 ]

@@ -51,6 +51,7 @@ SHARED_APPS = [
     'django_tenants',
     'apps.users',
     'apps.organizations',
+    'apps.audit_logs',
     'apps.subscriptions',
     'silk',
 
@@ -80,6 +81,7 @@ TENANT_APPS = (
     # Tenant-specific apps
     'apps.users',  # Tenant-specific user management
     'apps.core',  # Patients, Appointments
+    'apps.audit_logs',
 )
 
 
@@ -112,6 +114,8 @@ MIDDLEWARE = [
 
     # 'apps.subscriptions.middleware.SubscriptionStatusUpdateMiddleware',
     # 'apps.subscriptions.middleware.SubscriptionEnforcementMiddleware',
+
+    'apps.middlewares.AuditLoggingMiddleware',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -274,3 +278,72 @@ SIMPLE_JWT = {
 DEFAULT_FROM_EMAIL = 'noreply@yourapp.com'
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
+# ============ CELERY CONFIGURATION ============
+# Add at the end of settings.py
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.getenv(
+    'CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+
+# ============ LOGGING CONFIGURATION ============
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'colored': {
+            '()': 'colorlog.ColoredFormatter',
+            'format': '%(log_color)s[%(asctime)s] [%(levelname)s]%(reset)s %(white)s%(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+            'log_colors': {
+                'DEBUG': 'cyan',
+                'INFO': 'green',
+                'WARNING': 'yellow',
+                'ERROR': 'red',
+                'CRITICAL': 'red,bg_white',
+            },
+        },
+        'simple': {
+            'format': '[{asctime}] {levelname} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'colored',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'requests.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'request_logger': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+        'celery': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}
