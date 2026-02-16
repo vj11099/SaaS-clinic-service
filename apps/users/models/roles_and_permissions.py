@@ -1,5 +1,6 @@
 from django.db import models
 from utils.abstract_models import BaseAuditTrailModel
+from utils.caching import cached, CacheConfig
 
 
 class Permission(BaseAuditTrailModel):
@@ -59,8 +60,15 @@ class Role(BaseAuditTrailModel):
             rolepermission__is_deleted=False
         ).exists()
 
+    @cached(CacheConfig.ROLE_PERMISSIONS, timeout=CacheConfig.DEFAULT_TTL)
     def get_permissions_list(self):
-        """Get list of all permission names"""
+        """
+        Get list of all permission names for this role.
+
+        This method is now cached and will be automatically invalidated when:
+        - The role's permissions are changed (via RolePermission signals)
+        - The role itself is modified (via Role signals)
+        """
         # FIX: Also check the through table
         # OPTIMIZATION: Use values_list directly for minimal query
         return list(

@@ -54,6 +54,7 @@ SHARED_APPS = [
     'apps.audit_logs',
     'apps.subscriptions',
     'silk',
+    'django_redis',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -205,18 +206,27 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": os.getenv('REDIS_URL', "redis://127.0.0.1:6379/1"),
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#         },
-#         # Use the function from core/cache.py (or django-tenants built-in)
-#         "KEY_FUNCTION": "core.cache.make_key",
-#         "REVERSE_KEY_FUNCTION": "core.cache.reverse_key",
-#     }
-# }
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        # Use DB 1 for cache
+        'LOCATION': os.getenv('REDIS_CACHE_URL', 'redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+            },
+            # 'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',  # Compress cached data
+            # 'PARSER_CLASS': 'redis.connection.HiredisParser',  # Faster parser
+            # 'PASSWORD': os.getenv('REDIS_PASSWORD', None),  # If Redis requires auth
+        },
+        'KEY_PREFIX': 'myapp',  # Prefix all cache keys with your app name
+        'TIMEOUT': 300,  # Default timeout in seconds (5 minutes)
+    }
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -294,6 +304,7 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
 # ============ LOGGING CONFIGURATION ============
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

@@ -7,6 +7,7 @@ from django.core.validators import RegexValidator
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from .roles_and_permissions import Role, Permission
+from utils.caching import cached, CacheConfig
 
 
 class User(AbstractUser):
@@ -54,6 +55,7 @@ class User(AbstractUser):
         blank=True
     )
 
+    @cached(CacheConfig.USER_PERMISSIONS, timeout=900)
     def get_all_permissions(self):
         """Get all permissions from all user's roles"""
         # permissions = set()

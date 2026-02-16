@@ -15,7 +15,7 @@ class AppointmentViews(viewsets.ModelViewSet):
     # filterset_fields = ['patient', 'doctor']
 
     @require_permissions('appointments.view')
-    def get_queryset(self, request):
+    def get_queryset(self):
         queryset = Appointment.objects.select_related(
             'patient', 'doctor', 'created_by', 'updated_by'
         ).all()

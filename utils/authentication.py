@@ -2,6 +2,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from django.db import connection
+from utils.caching import cached
+# from rich import inspect
 
 
 class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -36,20 +38,55 @@ class TenantTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class TenantJWTAuthentication(JWTAuthentication):
+    """
+    Enhanced JWT authentication with caching to minimize database calls
+    """
+
     def authenticate(self, request):
-        auth_result = super().authenticate(request)
-        if auth_result is None:
+        header = self.get_header(request)
+
+        if header is None:
             return None
 
-        user, token = auth_result
+        # Get the raw JWT token from the request
+        raw_token = self.get_raw_token(self.get_header(request))
+        if raw_token is None:
+            return None
 
+        # Validate token with caching
+        validated_token = self.get_validated_token(raw_token)
+
+        # Get user with caching (this is where most DB calls happen)
+        user = self._get_cached_user_from_token(validated_token)
+
+        # Validate tenant schema
+        self._validate_tenant_schema(validated_token)
+
+        return user, validated_token
+
+    @cached(
+        key=lambda self, token: f"jwt_user:{token.get('user_id')}",
+        timeout=300,
+        tenant_aware=True
+    )
+    def _get_cached_user_from_token(self, validated_token):
+        """
+        Cache user lookup from token to avoid DB query on every request.
+        This is the main performance optimization.
+        """
+        return self.get_user(validated_token)
+
+    def _validate_tenant_schema(self, token):
+        """Validate that token schema matches current tenant"""
         token_schema = token.get('schema')
         current_schema = connection.schema_name
 
+        # Skip validation for public schema
+        if current_schema == 'public':
+            return
+
         if token_schema != current_schema:
             raise AuthenticationFailed(
-                f"Token invalid for organization '{current_schema}'."
+                f"Token invalid for organization '{current_schema}'. "
                 f"Issued for '{token_schema}'."
             )
-
-        return user, token
