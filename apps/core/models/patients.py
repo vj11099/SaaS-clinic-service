@@ -6,7 +6,7 @@ import os
 
 class __EncryptedField:
     def __init__(self):
-        key = str(os.getenv("SUPER_SECRET_KEY")).encode()
+        key = str(os.getenv("FERNET_KEY")).encode()
         self.crypto = Fernet(key)
 
     def encrypt(self, value):

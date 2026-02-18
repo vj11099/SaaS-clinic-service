@@ -4,8 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.db import connection
+from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
 
 from apps.core.models.documents import Document
@@ -16,6 +17,7 @@ from apps.core.serializers.documents import (
     DocumentUpdateSerializer
 )
 from apps.core.services.documents import DocumentService
+from apps.permissions import require_permissions
 
 
 class DocumentViewSet(viewsets.ModelViewSet):
@@ -23,12 +25,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
     ViewSet for Document CRUD operations
 
     Endpoints:
-    - POST /api/documents/ - Upload a new document
-    - GET /api/documents/ - List all documents
-    - GET /api/documents/{id}/ - Get document details
-    - PATCH /api/documents/{id}/ - Update document metadata
-    - DELETE /api/documents/{id}/ - Delete document (soft delete + hard delete file)
-    - GET /api/documents/{id}/download/ - Download document file
+    - POST   /api/documents/                              - Upload a new document
+    - GET    /api/documents/                              - List all documents
+    - GET    /api/documents/{id}/                         - Get document details
+    - PATCH  /api/documents/{id}/                         - Update document metadata
+    - DELETE /api/documents/{id}/                         - Soft delete record + delete file from R2
+    - GET    /api/documents/{id}/download/                - Get signed R2 download URL
+    - GET    /api/documents/patient/{patient_id}/         - List documents for a patient
     """
 
     permission_classes = [IsAuthenticated]
@@ -50,11 +53,24 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return DocumentDetailSerializer
         return DocumentListSerializer
 
+    @require_permissions('documents.read')
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @require_permissions('documents.read')
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @require_permissions('documents.update')
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
     @swagger_auto_schema(
         operation_description="Upload a patient document",
         responses={201: DocumentUploadSerializer()},
         consumes=['multipart/form-data']
     )
+    @require_permissions('documents.create')
     def create(self, request, *args, **kwargs):
         """
         Upload a new document
@@ -70,13 +86,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
 
-        # Get current schema name from connection
         schema_name = connection.schema_name
-
-        # Trigger async processing task with schema name
         from apps.core.tasks import process_document_task
-        process_document_task.delay(
-            document.id, schema_name)  # ✓ Pass schema_name!
+        process_document_task.delay(document.id, schema_name)
 
         return Response(
             DocumentDetailSerializer(
@@ -84,13 +96,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
 
+    @require_permissions('documents.delete')
     def destroy(self, request, *args, **kwargs):
         """
-        Delete a document (soft delete from DB, hard delete file from storage)
+        Delete a document — soft deletes the DB record and hard deletes the file from R2
         """
         document = self.get_object()
-
-        # Delete using service
         success, error = DocumentService.delete_document(
             document, request.user)
 
@@ -106,11 +117,12 @@ class DocumentViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=['get'], url_path='download')
+    @require_permissions('documents.read')
     def download(self, request, pk=None):
         """
-        Download document file
-
-        Returns the PDF file with appropriate headers
+        Returns a signed R2 URL for direct file download.
+        The client uses this URL to download the file directly from R2.
+        URL expires after the time set in AWS_QUERYSTRING_EXPIRE (default 1 hour).
         """
         document = self.get_object()
 
@@ -120,28 +132,17 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        file_path = document.get_file_path()
-
-        if not file_path or not document.file:
+        signed_url = document.get_signed_url()
+        if not signed_url:
             raise Http404("Document file not found")
 
-        # Serve file
-        try:
-            response = FileResponse(
-                document.file.open('rb'),
-                content_type=document.mime_type
-            )
-            response['Content-Disposition'] = f'attachment; filename="{
-                document.file_name}"'
-            response['Content-Length'] = document.file_size
-            return response
-        except Exception as e:
-            return Response(
-                {'error': f'Error downloading file: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response({
+            'download_url': signed_url,
+            'expires_in': getattr(settings, 'AWS_QUERYSTRING_EXPIRE', 3600)
+        })
 
     @action(detail=False, methods=['get'], url_path='patient/(?P<patient_id>[^/.]+)')
+    @require_permissions('documents.read')
     def patient_documents(self, request, patient_id=None):
         """
         Get all documents for a specific patient
@@ -159,56 +160,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
-
-    @action(detail=True, methods=['get'], url_path='debug')
-    def debug_status(self, request, pk=None):
-        """
-        Debug endpoint to check document status and file info
-        """
-        document = self.get_object()
-
-        import os
-        file_path = document.get_file_path()
-        file_exists = os.path.exists(file_path) if file_path else False
-
-        return Response({
-            'id': document.id,
-            'title': document.title,
-            'status': document.status,
-            'processing_error': document.processing_error,
-            'file_field': str(document.file),
-            'file_path': file_path,
-            'file_exists': file_exists,
-            'file_size': document.file_size,
-            'mime_type': document.mime_type,
-            'schema': connection.schema_name,
-            'created_at': document.created_at,
-            'updated_at': document.updated_at,
-        })
-
-    @action(detail=True, methods=['post'], url_path='reprocess')
-    def reprocess(self, request, pk=None):
-        """
-        Manually trigger reprocessing of a document
-        """
-        document = self.get_object()
-
-        # Reset status to pending
-        document.status = 'pending'
-        document.processing_error = None
-        document.save(
-            update_fields=['status', 'processing_error', 'updated_at'])
-
-        # Get current schema and trigger task
-        schema_name = connection.schema_name
-        from apps.core.tasks import process_document_task
-        process_document_task.delay(document.id, schema_name)
-
-        return Response({
-            'message': 'Document reprocessing triggered',
-            'document_id': document.id,
-            'status': document.status
-        })
 
     # @action(detail=False, methods=['get'], url_path='stats/patient/(?P<patient_id>[^/.]+)')
     # def patient_stats(self, request, patient_id=None):

@@ -3,6 +3,7 @@
 # from ..organizations.models import Organization
 from django.db import transaction
 from .models import SubscriptionPlan, SubscriptionHistory
+from ..organizations.revenue_services import RevenueService
 
 
 class SubscriptionService:
@@ -32,7 +33,7 @@ class SubscriptionService:
     @transaction.atomic
     def subscribe(organization, plan, performed_by_email, performed_by_user=None):
         """
-        Subscribe an organization to a paid plan
+        Subscribe an organization to a paid plan and record revenue
 
         Args:
             organization: Organization instance
@@ -60,19 +61,23 @@ class SubscriptionService:
         if previous_plan:
             if plan.price > previous_plan.price:
                 action = 'upgraded'
+                transaction_type = 'upgrade'
                 notes = f"Upgraded from {previous_plan.name} to {plan.name}"
             elif plan.price < previous_plan.price:
                 action = 'downgraded'
+                transaction_type = 'subscription'
                 notes = f"Downgraded from {previous_plan.name} to {plan.name}"
             else:
                 action = 'subscribed'
+                transaction_type = 'subscription'
                 notes = f"Changed to {plan.name}"
         else:
             action = 'subscribed'
+            transaction_type = 'subscription'
             notes = f"Subscribed to {plan.name}"
 
         # Create history record
-        SubscriptionHistory.objects.create(
+        history = SubscriptionHistory.objects.create(
             organization=organization,
             plan=plan,
             previous_plan=previous_plan,
@@ -87,13 +92,25 @@ class SubscriptionService:
             notes=notes
         )
 
+        # Record revenue (only if plan has a price > 0)
+        if plan.price > 0:
+            RevenueService.record_payment(
+                organization=organization,
+                plan=plan,
+                amount=plan.price,
+                transaction_type=transaction_type,
+                processed_by_email=performed_by_email,
+                subscription_history=history,
+                notes=notes
+            )
+
         return organization
 
     @staticmethod
     @transaction.atomic
     def renew_subscription(organization, performed_by_email, new_plan=None, performed_by_user=None):
         """
-        Renew an organization's subscription
+        Renew an organization's subscription and record revenue
 
         Args:
             organization: Organization instance
@@ -125,8 +142,9 @@ class SubscriptionService:
 
         # Create history record
         action = 'upgraded' if new_plan and new_plan.price > previous_plan.price else 'renewed'
+        transaction_type = 'upgrade' if action == 'upgraded' else 'renewal'
 
-        SubscriptionHistory.objects.create(
+        history = SubscriptionHistory.objects.create(
             organization=organization,
             plan=organization.subscription_plan,
             previous_plan=previous_plan if new_plan else None,
@@ -141,6 +159,19 @@ class SubscriptionService:
             notes=f"Renewed subscription to {
                 organization.subscription_plan.name}"
         )
+
+        # Record revenue (only if plan has a price > 0)
+        if organization.subscription_plan.price > 0:
+            RevenueService.record_payment(
+                organization=organization,
+                plan=organization.subscription_plan,
+                amount=organization.subscription_plan.price,
+                transaction_type=transaction_type,
+                processed_by_email=performed_by_email,
+                subscription_history=history,
+                notes=f"Renewed subscription to {
+                    organization.subscription_plan.name}"
+            )
 
         return organization
 
@@ -184,6 +215,8 @@ class SubscriptionService:
             },
             notes=reason or "Subscription cancelled"
         )
+
+        # Note: No revenue record for cancellations
 
         return organization
 

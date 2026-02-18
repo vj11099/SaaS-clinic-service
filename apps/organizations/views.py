@@ -41,60 +41,78 @@ class OrganizationRegisterView(generics.CreateAPIView):
         )
         serializer.is_valid(raise_exception=True)
 
+        # try:
+        #     # Atomic so either all of the below queries execute or none
+        #     with transaction.atomic():
+        #         # Get or use default subscription plan
+        #         plan = self._get_subscription_plan(serializer.validated_data)
+
+        #         # Create organization (tenant)
+        #         organization = self._create_organization(
+        #             serializer.validated_data
+        #         )
+
+        #         # Create domain
+        #         domain = self._create_domain(organization)
+
+        #         # Create admin user in tenant schema
+        #         admin_user, generated_password = self._create_admin_user(
+        #             organization,
+        #             serializer.validated_data
+        #         )
+
+        #         # Assign subscription plan
+        #         subscription_info = self._assign_subscription_plan(
+        #             organization,
+        #             plan,
+        #             serializer.validated_data['email']
+        #         )
+
+        #         send_verification_email(admin_user, generated_password)
+
         try:
-            # Atomic so either all of the below queries execute or none
+            plan = self._get_subscription_plan()
+
+            # Outside atomic — django-tenants needs its own transaction control
+            organization = self._create_organization(serializer.validated_data)
+            domain = self._create_domain(organization)
+
+            # Now wrap only the remaining operations
             with transaction.atomic():
-                # Get or use default subscription plan
-                plan = self._get_subscription_plan(serializer.validated_data)
-
-                # Create organization (tenant)
-                organization = self._create_organization(
-                    serializer.validated_data
-                )
-
-                # Create domain
-                domain = self._create_domain(organization)
-
-                # Create admin user in tenant schema
                 admin_user, generated_password = self._create_admin_user(
-                    organization,
-                    serializer.validated_data
+                    organization, serializer.validated_data
                 )
-
-                # Assign subscription plan
                 subscription_info = self._assign_subscription_plan(
-                    organization,
-                    plan,
-                    serializer.validated_data['email']
+                    organization, plan, serializer.validated_data['email']
                 )
 
-                send_verification_email(admin_user, generated_password)
-
-                # Step 6: Return success response
-                return Response(
-                    {
-                        'success': True,
-                        'message': 'Organization created successfully. '
-                        'Please check your registered mail for verification',
-                        'data': {
-                            'organization': {
-                                'id': organization.id,
-                                'name': organization.name,
-                                'schema_name': organization.schema_name,
-                            },
-                            'domain': domain.domain,
-                            'admin_user': {
-                                'id': admin_user.id,
-                                'username': admin_user.username,
-                                'email': admin_user.email,
-                            },
-                            'subscription': subscription_info
-                        }
-                    },
-                    status=status.HTTP_201_CREATED
-                )
+            send_verification_email(admin_user, generated_password)
+            return Response(
+                {
+                    'success': True,
+                    'message': 'Organization created successfully. '
+                    'Please check your registered mail for verification',
+                    'data': {
+                        'organization': {
+                            'id': organization.id,
+                            'name': organization.name,
+                            'schema_name': organization.schema_name,
+                        },
+                        'domain': domain.domain,
+                        'admin_user': {
+                            'id': admin_user.id,
+                            'username': admin_user.username,
+                            'email': admin_user.email,
+                        },
+                        'subscription': subscription_info
+                    }
+                },
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
+            if 'organization' in locals():
+                organization.delete()
             return Response(
                 {
                     'success': False,
@@ -106,41 +124,28 @@ class OrganizationRegisterView(generics.CreateAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def _get_subscription_plan(self, validated_data):
+    def _get_subscription_plan():
         """Get subscription plan from request plan"""
-        slug = validated_data.get('slug')
-
-        if slug:
-            # Use selected plan
+        try:
             return SubscriptionPlan.objects.get(
-                slug=slug,
+                slug='trial',
                 is_active=True,
                 is_public=True
             )
-        else:
-            # First try to get plan with slug 'trial'
-            # If not found, get the first free plan (price = 0)
-            # If still not found, raise error
-            try:
-                return SubscriptionPlan.objects.get(
-                    slug='trial',
-                    is_active=True,
-                    is_public=True
-                )
-            except SubscriptionPlan.DoesNotExist:
-                # Fallback to first free plan
-                plan = SubscriptionPlan.objects.filter(
-                    price=0,
-                    is_active=True,
-                    is_public=True
-                ).first()
+        except SubscriptionPlan.DoesNotExist:
+            # Fallback to first free plan
+            plan = SubscriptionPlan.objects.filter(
+                price=0,
+                is_active=True,
+                is_public=True
+            ).first()
 
-                if not plan:
-                    raise Exception(
-                        "No default trial plan found. "
-                        "Please create a plan with slug 'trial' or a free plan."
-                    )
-                return plan
+            if not plan:
+                raise Exception(
+                    "No default trial plan found. "
+                    "Please create a plan with slug 'trial' or a free plan."
+                )
+            return plan
 
     def _create_organization(self, validated_data):
         """
@@ -177,16 +182,15 @@ class OrganizationRegisterView(generics.CreateAPIView):
             from apps.users.models import User
 
             # Create user
-            admin_user = User.objects.create(
+            admin_user = User.objects.create_user(
                 username=validated_data['username'],
                 email=validated_data['email'],
                 first_name=validated_data.get('first_name', ''),
                 last_name=validated_data.get('last_name', ''),
-                is_superuser=validated_data.get('is_superuser', ''),
-                is_tenant_admin=validated_data.get('is_tenant_admin', ''),
-                is_staff=validated_data.get('is_staff', ''),
+                is_superuser=validated_data.get('is_superuser', False),
+                is_tenant_admin=validated_data.get('is_tenant_admin', True),
+                is_staff=validated_data.get('is_staff', False),
             )
-
             # Generate password WHILE STILL in schema context
             generated_password = admin_user.generate_password()
 

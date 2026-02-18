@@ -19,44 +19,38 @@ def auto_set_superuser_fields(sender, instance, **kwargs):
 
 @receiver(post_save, sender=User)
 def assign_admin_role_to_superuser(sender, instance, created, **kwargs):
-    """
-    Automatically assign Admin role to superusers upon creation
-    Works across all schemas and apps
-    """
-    # Only proceed if user is a superuser
     if not instance.is_superuser:
         return
 
-    # For new users or when is_superuser was just set to True
-    if created or instance.is_superuser:
+    # Don't run during migrations
+    from django.db import connection
+    if connection.in_atomic_block:
         try:
-            # Get the Admin role in the current schema
-            admin_role = Role.objects.get(
-                name='superuser', is_system_role=True
-            )
+            from django.test.utils import CaptureQueriesContext
+        except ImportError:
+            pass
 
-            # Assign role if not already assigned
+    # Better approach: check if tables exist first
+    if 'users_userrole' not in connection.introspection.table_names():
+        return
+    if 'users_role' not in connection.introspection.table_names():
+        return
+
+    if created:
+        try:
+            admin_role = Role.objects.get(
+                name='superuser', is_system_role=True)
             UserRole.objects.get_or_create(
                 user=instance,
                 role=admin_role,
-                defaults={
-                    'is_active': True,
-                    'is_deleted': False,
-                }
+                defaults={'is_active': True, 'is_deleted': False}
             )
-
-            # Optional: Log success
-            print(f"Assigned superuser role to {
-                  instance.email} in schema {connection.schema_name}")
-
         except Role.DoesNotExist:
-            # Log warning - Admin role doesn't exist in this schema
-            # import logging
-            # logger = logging.getLogger(__name__)
-            # logger.warning(
-            print(
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
                 f"Superuser role not found in schema '{
                     connection.schema_name}'. "
-                f"Cannot assign to superuser {instance.email}. "
-                f"Run migrations to create the role."
+                f"Cannot assign to superuser {instance.email}."
             )
+            # Don't raise here — let org creation succeed

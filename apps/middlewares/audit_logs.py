@@ -4,6 +4,7 @@ from django.utils.deprecation import MiddlewareMixin
 from django.db import connection
 from apps.audit_logs.tasks import log_request_async
 import logging
+from rich import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
 
     # Methods to exclude from logging
     EXCLUDED_METHODS = ['OPTIONS', 'HEAD']
+    EXCLUDED_PATHS = ['api-keys']
 
     def process_request(self, request):
         """Start timer for request duration tracking"""
@@ -29,6 +31,10 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         """
         Capture response data and trigger async logging
         """
+        for item in self.EXCLUDED_PATHS:
+            if item in request.path:
+                return response
+
         # Skip excluded methods
         if request.method in self.EXCLUDED_METHODS:
             return response

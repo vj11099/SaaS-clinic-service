@@ -10,7 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import re
+# import re
 from urllib.parse import urlparse, parse_qsl
 from dotenv import load_dotenv
 import os
@@ -26,13 +26,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-90=z3%cpo2co8tpn6(876q^$vpqbf3dbnyneehc405t1qvh(kq'
+FERNET_KEY = os.getenv('FERNET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ['.localhost', '127.0.0.1', '.ngrok-free.app']
 
-CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app']
+# here
+
+CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.app', ]
 
 # ALLOWED_HOSTS = []
 
@@ -53,6 +56,7 @@ SHARED_APPS = [
     'apps.organizations',
     'apps.audit_logs',
     'apps.subscriptions',
+    'apps.api_keys',
     'silk',
     'django_redis',
 
@@ -358,3 +362,24 @@ LOGGING = {
         },
     },
 }
+
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+
+# AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+# AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+# AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+# AWS_S3_ENDPOINT_URL = os.getenv('R2_ENDPOINT_URL')
+# AWS_S3_REGION_NAME = 'auto'
+# AWS_DEFAULT_ACL = 'private'         # never expose files publicly
+# AWS_QUERYSTRING_AUTH = True         # enable signed URLs
+# AWS_QUERYSTRING_EXPIRE = 3600       # signed URL expiry in seconds (1 hour)
+# AWS_S3_FILE_OVERWRITE = False       # never overwrite files with the same name

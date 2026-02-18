@@ -1,7 +1,6 @@
 from django.db import models
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
-# import os
 
 
 class DocumentQuerySet(models.QuerySet):
@@ -15,7 +14,7 @@ class DocumentQuerySet(models.QuerySet):
 
 
 class DocumentManager(models.Manager):
-    """Manager for Document model"""
+    """Manager for Document model — excludes soft-deleted records by default"""
 
     def get_queryset(self):
         return DocumentQuerySet(self.model, using=self._db).active()
@@ -33,7 +32,8 @@ class DocumentManager(models.Manager):
 class Document(models.Model):
     """
     Document model - TENANT schema
-    Stores PDF documents associated with patients
+    Stores PDF documents associated with patients.
+    Files are stored in Cloudflare R2 via django-storages S3 backend.
     """
 
     DOCUMENT_TYPE_CHOICES = [
@@ -41,7 +41,15 @@ class Document(models.Model):
         ('lab_report', 'Lab Report'),
         ('prescription', 'Prescription'),
         ('insurance', 'Insurance Document'),
+        ('consent_form', 'Consent Form'),
         ('other', 'Other'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
     ]
 
     # Relations
@@ -50,12 +58,17 @@ class Document(models.Model):
         on_delete=models.CASCADE,
         related_name='documents'
     )
-
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         related_name='uploaded_documents'
+    )
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='deleted_documents'
     )
 
     # Document metadata
@@ -68,8 +81,10 @@ class Document(models.Model):
     )
 
     # File information
+    # upload_to is overridden in DocumentService.save_document via file.save(file_path, ...)
+    # actual path: documents/{schema_name}/{patient_id}/{filename}
     file = models.FileField(
-        upload_to='documents/',  # Will be overridden in service
+        upload_to='documents/',
         validators=[FileExtensionValidator(allowed_extensions=['pdf'])]
     )
     file_name = models.CharField(max_length=255)
@@ -77,12 +92,6 @@ class Document(models.Model):
     mime_type = models.CharField(max_length=100, default='application/pdf')
 
     # Processing status
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-    ]
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -94,19 +103,13 @@ class Document(models.Model):
     # Soft delete
     is_deleted = models.BooleanField(default=False, db_index=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='deleted_documents'
-    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = DocumentManager()
-    all_objects = models.Manager()
+    objects = DocumentManager()       # excludes deleted by default
+    all_objects = models.Manager()    # includes deleted — use carefully
 
     class Meta:
         db_table = 'documents'
@@ -121,14 +124,11 @@ class Document(models.Model):
     def __str__(self):
         return f"{self.title} - {self.patient}"
 
-    def get_file_path(self):
-        """Get the full file path"""
-        if self.file:
-            return self.file.path
-        return None
-
-    def get_file_url(self):
-        """Get the file URL"""
+    def get_signed_url(self):
+        """
+        Get a temporary signed R2 URL for file access.
+        Expiry is controlled by AWS_QUERYSTRING_EXPIRE in settings (default 1 hour).
+        """
         if self.file:
             return self.file.url
         return None

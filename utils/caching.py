@@ -106,11 +106,11 @@ def cached(
             # Try to get from cache
             result = cache.get(cache_key)
             if result is not None:
-                print(f"Cache HIT: {cache_key}")
+                # print(f"Cache HIT: {cache_key}")
                 return result
 
             # Cache miss - execute function
-            print(f"Cache MISS: {cache_key}")
+            # print(f"Cache MISS: {cache_key}")
             result = func(*args, **kwargs)
 
             # Convert queryset to list if needed
@@ -255,7 +255,7 @@ def _invalidate_cache(key, key_builder, func, args, kwargs, tenant_aware, namesp
         cache_key = f"tenant:{schema}:{cache_key}"
 
     cache.delete(cache_key)
-    print(f"Cache invalidated: {cache_key}")
+    # print(f"Cache invalidated: {cache_key}")
 
 
 # ========================================================================
@@ -300,7 +300,7 @@ def invalidate_cache(key_template, tenant_aware=True, namespace=None, **template
         cache_key = f"tenant:{schema}:{cache_key}"
 
     cache.delete(cache_key)
-    print(f"Cache invalidated: {cache_key}")
+    # print(f"Cache invalidated: {cache_key}")
 
 
 def invalidate_cache_pattern(*key_parts, tenant_aware=True, namespace=None):
@@ -321,7 +321,7 @@ def invalidate_cache_pattern(*key_parts, tenant_aware=True, namespace=None):
         cache_key = f"tenant:{schema}:{cache_key}"
 
     cache.delete(cache_key)
-    print(f"Cache invalidated: {cache_key}")
+    # print(f"Cache invalidated: {cache_key}")
 
 
 # ========================================================================

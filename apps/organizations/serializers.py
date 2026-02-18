@@ -61,11 +61,11 @@ class OrganizationRegisterSerializer(serializers.Serializer):
     )
 
     # Subscription plan field
-    slug = serializers.CharField(
-        required=False,
-        allow_null=True,
-        help_text="Slug field of subscription plan (optional for admin)"
-    )
+    # slug = serializers.CharField(
+    #     required=False,
+    #     allow_null=True,
+    #     help_text="Slug field of subscription plan (optional for admin)"
+    # )
 
     is_superuser = serializers.BooleanField(
         default=False,

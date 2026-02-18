@@ -1,6 +1,8 @@
 amqp==5.3.1
 asgiref==3.11.0
 billiard==4.2.4
+boto3==1.42.50
+botocore==1.42.50
 celery==5.6.2
 cffi==2.0.0
 click==8.3.1
@@ -12,7 +14,9 @@ cryptography==46.0.4
 Django==5.2.10
 django-cors-headers==4.9.0
 django-filter==25.2
+django-redis==6.0.0
 django-silk==5.4.3
+django-storages==1.14.6
 django-tenants==3.9.0
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
@@ -20,6 +24,7 @@ dotenv==0.9.9
 drf-yasg==1.21.14
 gprof2dot==2025.4.14
 inflection==0.5.1
+jmespath==1.1.0
 kombu==5.6.2
 markdown-it-py==4.0.0
 mdurl==0.1.2
@@ -35,10 +40,12 @@ pytz==2025.2
 PyYAML==6.0.3
 redis==7.1.1
 rich==14.3.2
+s3transfer==0.16.0
 six==1.17.0
 sqlparse==0.5.5
 tzdata==2025.3
 tzlocal==5.3.1
 uritemplate==4.2.0
+urllib3==2.6.3
 vine==5.1.0
 wcwidth==0.6.0

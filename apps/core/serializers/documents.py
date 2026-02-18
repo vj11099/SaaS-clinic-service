@@ -20,31 +20,25 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
         ]
 
     def validate_file(self, file):
-        """Validate the uploaded file"""
         is_valid, error = DocumentService.validate_file(file)
         if not is_valid:
             raise serializers.ValidationError(error)
         return file
 
     def validate_patient(self, patient):
-        """Validate patient exists and is active"""
         if not patient.is_active:
             raise serializers.ValidationError(
                 "Cannot upload documents for inactive patients")
         return patient
 
     def create(self, validated_data):
-        """Create document with file handling"""
         file = validated_data.pop('file')
         patient = validated_data.get('patient')
         title = validated_data.get('title', file.name)
         description = validated_data.get('description', '')
         document_type = validated_data.get('document_type', 'other')
-
-        # Get user from context
         user = self.context['request'].user
 
-        # Save document using service
         document, error = DocumentService.save_document(
             file=file,
             patient=patient,
@@ -87,13 +81,13 @@ class DocumentListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_uploaded_by_name(self, obj):
-        """Get the name of the user who uploaded the document"""
         if obj.uploaded_by:
             return f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip() or obj.uploaded_by.username
         return None
 
     def get_file_size_mb(self, obj):
-        """Convert file size to MB"""
+        if not obj.file_size:
+            return 0
         return round(obj.file_size / (1024 * 1024), 2)
 
 
@@ -127,22 +121,18 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_uploaded_by_name(self, obj):
-        """Get the name of the user who uploaded the document"""
         if obj.uploaded_by:
             return f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip() or obj.uploaded_by.username
         return None
 
     def get_file_size_mb(self, obj):
-        """Convert file size to MB"""
+        if not obj.file_size:
+            return 0
         return round(obj.file_size / (1024 * 1024), 2)
 
     def get_file_url(self, obj):
-        """Get file download URL"""
-        request = self.context.get('request')
-        if obj.file and request:
-            # Return relative URL - the view will handle actual file serving
-            return request.build_absolute_uri(f'/api/documents/{obj.id}/download/')
-        return None
+        """Get signed R2 URL for file download (expiry set in settings)"""
+        return obj.get_signed_url()
 
 
 class DocumentUpdateSerializer(serializers.ModelSerializer):
@@ -157,7 +147,6 @@ class DocumentUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        """Update only allowed fields"""
         instance.title = validated_data.get('title', instance.title)
         instance.description = validated_data.get(
             'description', instance.description)

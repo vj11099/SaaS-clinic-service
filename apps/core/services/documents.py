@@ -1,10 +1,7 @@
-import os
 import mimetypes
 from django.conf import settings
-# from django.core.files.base import ContentFile
 from django.db import connection, models
 from django.utils import timezone
-from pathlib import Path
 
 
 class DocumentService:
@@ -18,9 +15,11 @@ class DocumentService:
         """
         Generate upload path for document
         Format: documents/{schema_name}/{patient_id}/{filename}
+        Note: This path is passed directly to file.save() in save_document,
+        overriding the model's upload_to='documents/' default.
         """
         schema_name = connection.schema_name
-        return os.path.join('documents', schema_name, str(patient_id), filename)
+        return f'documents/{schema_name}/{patient_id}/{filename}'
 
     @staticmethod
     def validate_file(file):
@@ -38,14 +37,21 @@ class DocumentService:
         mime_type = mimetypes.guess_type(file.name)[0]
         allowed_types = getattr(
             settings, 'ALLOWED_DOCUMENT_TYPES', ['application/pdf'])
-
         if mime_type not in allowed_types:
             return False, "Invalid file type. Only PDF files are allowed."
 
         # Check file extension
-        ext = os.path.splitext(file.name)[1].lower()
-        if ext != '.pdf':
+        ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else ''
+        if ext != 'pdf':
             return False, "Invalid file extension. Only .pdf files are allowed."
+
+        # Check actual file content (not just extension/mime)
+        # Valid PDFs always start with %PDF
+        file.seek(0)
+        header = file.read(4)
+        file.seek(0)
+        if header != b'%PDF':
+            return False, "Invalid file. File does not appear to be a valid PDF."
 
         return True, None
 
@@ -70,12 +76,10 @@ class DocumentService:
             return None, error
 
         try:
-            # Generate unique filename
             original_filename = file.name
             file_path = DocumentService.get_upload_path(
                 patient.id, original_filename)
 
-            # Create document instance
             document = Document(
                 patient=patient,
                 uploaded_by=uploaded_by,
@@ -89,7 +93,7 @@ class DocumentService:
                 status='pending'
             )
 
-            # Save file
+            # file.save() uploads directly to R2 via django-storages
             document.file.save(file_path, file, save=False)
             document.save()
 
@@ -101,11 +105,11 @@ class DocumentService:
     @staticmethod
     def delete_document(document, deleted_by):
         """
-        Soft delete document from DB and hard delete file from storage
+        Soft delete document from DB and delete file from R2
         """
         try:
-            # Get file path before marking as deleted
-            file_path = document.get_file_path()
+            # Store file reference before soft delete
+            file = document.file
 
             # Soft delete in database
             document.is_deleted = True
@@ -114,12 +118,9 @@ class DocumentService:
             document.save(
                 update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'updated_at'])
 
-            # Hard delete file from storage
-            if file_path and os.path.exists(file_path):
-                os.remove(file_path)
-
-                # Try to remove empty directories
-                DocumentService._cleanup_empty_directories(file_path)
+            # Delete file from R2
+            if file:
+                file.delete(save=False)
 
             return True, None
 
@@ -127,48 +128,26 @@ class DocumentService:
             return False, f"Error deleting document: {str(e)}"
 
     @staticmethod
-    def _cleanup_empty_directories(file_path):
+    def get_document_stats(patient):
         """
-        Remove empty parent directories after file deletion
-        Stops at MEDIA_ROOT
+        Get document statistics for a patient
         """
-        try:
-            media_root = Path(settings.MEDIA_ROOT)
-            current_dir = Path(file_path).parent
+        from apps.core.models.documents import Document
 
-            # Walk up the directory tree
-            while current_dir != media_root and current_dir.exists():
-                # Check if directory is empty
-                if not any(current_dir.iterdir()):
-                    current_dir.rmdir()
-                    current_dir = current_dir.parent
-                else:
-                    break
-        except Exception:
-            # Silently ignore cleanup errors
-            pass
+        documents = Document.objects.filter(patient=patient)
 
-    # @staticmethod
-    # def get_document_stats(patient):
-    #     """
-    #     Get document statistics for a patient
-    #     """
-    #     from apps.core.models.documents import Document
-
-    #     documents = Document.objects.filter(patient=patient)
-
-    #     return {
-    #         'total_documents': documents.count(),
-    #         'total_size_bytes': documents.aggregate(
-    #             total=models.Sum('file_size')
-    #         )['total'] or 0,
-    #         'by_type': documents.values('document_type').annotate(
-    #             count=models.Count('id')
-    #         ),
-    #         'by_status': documents.values('status').annotate(
-    #             count=models.Count('id')
-    #         )
-    #     }
+        return {
+            'total_documents': documents.count(),
+            'total_size_bytes': documents.aggregate(
+                total=models.Sum('file_size')
+            )['total'] or 0,
+            'by_type': documents.values('document_type').annotate(
+                count=models.Count('id')
+            ),
+            'by_status': documents.values('status').annotate(
+                count=models.Count('id')
+            )
+        }
 
     @staticmethod
     def mark_processing_complete(document, success=True, error=None):

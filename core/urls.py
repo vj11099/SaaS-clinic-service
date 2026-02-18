@@ -60,6 +60,7 @@ urlpatterns = [
     path('api/organization/', include('apps.organizations.urls')),
     path('api/clinic/', include('apps.core.urls')),
     path('api/subscriptions/', include('apps.subscriptions.urls')),
+    path('api/', include('apps.api_keys.urls')),
 
 
     path('silk/', include('silk.urls', namespace='silk')),

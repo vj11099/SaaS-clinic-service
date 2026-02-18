@@ -11,6 +11,12 @@ def get_current_tenant_schema():
     return getattr(connection, 'schema_name', 'public')
 
 
+def _tables_ready(*table_names):
+    """Check if all required tables exist in the current schema"""
+    existing = connection.introspection.table_names()
+    return all(t in existing for t in table_names)
+
+
 def invalidate_all_user_permissions_cache():
     """
     Invalidate permission cache for ALL users in the current tenant.
