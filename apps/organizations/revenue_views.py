@@ -9,7 +9,6 @@ from .revenue_serializers import (
     RevenueSerializer,
     RevenueSummarySerializer,
     RevenueByPlanSerializer,
-    RevenueByTypeSerializer,
     MonthlyRevenueSerializer,
 )
 from .revenue_services import RevenueService
@@ -24,7 +23,6 @@ class RevenueViewSet(viewsets.ReadOnlyModelViewSet):
         GET /api/revenue/{id}/ - Get specific revenue record
         GET /api/revenue/summary/ - Get revenue summary
         GET /api/revenue/by_plan/ - Get revenue by plan
-        GET /api/revenue/by_type/ - Get revenue by type
         GET /api/revenue/monthly/ - Get monthly revenue
         GET /api/revenue/organization/{org_id}/ - Get org revenue
     """
@@ -101,26 +99,6 @@ class RevenueViewSet(viewsets.ReadOnlyModelViewSet):
 
         data = RevenueService.get_revenue_by_plan(start_date, end_date)
         serializer = RevenueByPlanSerializer(data, many=True)
-
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def by_type(self, request):
-        """
-        Get revenue breakdown by transaction type
-
-        GET /api/revenue/by_type/?start_date=2024-01-01&end_date=2024-12-31
-        """
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-
-        if start_date:
-            start_date = parse_datetime(start_date)
-        if end_date:
-            end_date = parse_datetime(end_date)
-
-        data = RevenueService.get_revenue_by_type(start_date, end_date)
-        serializer = RevenueByTypeSerializer(data, many=True)
 
         return Response(serializer.data)
 

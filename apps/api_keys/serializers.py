@@ -8,14 +8,14 @@ class APIKeyListSerializer(serializers.ModelSerializer):
 
     created_by_name = serializers.SerializerMethodField()
     updated_by_name = serializers.SerializerMethodField()
-    api_key_preview = serializers.SerializerMethodField()
+    # api_key_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = APIKey
         fields = [
             'id',
             'service_name',
-            'api_key_preview',
+            # 'api_key_preview',
             'is_active',
             'created_at',
             'updated_at',
@@ -36,15 +36,15 @@ class APIKeyListSerializer(serializers.ModelSerializer):
             return f"{obj.updated_by.first_name} {obj.updated_by.last_name}".strip() or obj.updated_by.username
         return None
 
-    def get_api_key_preview(self, obj):
-        """Show masked preview of the key"""
-        try:
-            decrypted = APIKeyEncryption.decrypt(obj.encrypted_api_key)
-            if len(decrypted) > 8:
-                return f"{decrypted[:4]}...{decrypted[-4:]}"
-            return "****"
-        except Exception:
-            return "[ENCRYPTED]"
+    # def get_api_key_preview(self, obj):
+    #     """Show masked preview of the key"""
+    #     try:
+    #         decrypted = APIKeyEncryption.decrypt(obj.encrypted_api_key)
+    #         if len(decrypted) > 8:
+    #             return f"{decrypted[:4]}...{decrypted[-4:]}"
+    #         return "****"
+    #     except Exception:
+    #         return "[ENCRYPTED]"
 
 
 class APIKeyDetailSerializer(serializers.ModelSerializer):

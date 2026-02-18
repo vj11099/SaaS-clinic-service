@@ -84,25 +84,6 @@ class RevenueService:
         return list(revenue_by_plan)
 
     @staticmethod
-    def get_revenue_by_type(start_date=None, end_date=None):
-        """Get revenue breakdown by transaction type"""
-        queryset = Revenue.objects.all()
-
-        if start_date:
-            queryset = queryset.filter(created_at__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(created_at__lte=end_date)
-
-        revenue_by_type = queryset.values(
-            'transaction_type'
-        ).annotate(
-            total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')
-
-        return list(revenue_by_type)
-
-    @staticmethod
     def get_monthly_revenue(months=12):
         """Get revenue for the last N months"""
         from django.db.models.functions import TruncMonth

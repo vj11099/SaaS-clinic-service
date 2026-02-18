@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter, SearchFilter
 from drf_yasg.utils import swagger_auto_schema
@@ -30,7 +30,7 @@ class APIKeyViewSet(viewsets.ModelViewSet):
     - GET    /api/api-keys/by-service/{service_name}/ - Get key by service name
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     # TODO: Add your custom permission here, e.g.:
     # permission_classes = [IsAuthenticated, HasAPIKeyManagementPermission]
 

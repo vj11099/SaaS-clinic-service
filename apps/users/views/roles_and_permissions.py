@@ -18,6 +18,7 @@ from ..serializers.roles_and_permissions import (
     PermissionListSerializer,
     RoleWithPermissionsDetailSerializer
 )
+from apps.permissions import require_permissions
 
 
 class PermissionViewSet(viewsets.ModelViewSet):
@@ -52,12 +53,25 @@ class PermissionViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by('name')
 
+    @require_permissions('permissions.read')
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @require_permissions('permissions.read')
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @require_permissions('permissions.update')
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
     def perform_destroy(self, instance):
         """Soft delete the permission"""
         instance.is_deleted = True
         instance.is_active = False
         instance.save(update_fields=['is_deleted', 'is_active', 'updated_at'])
 
+    @require_permissions('permissions.delete')
     def destroy(self, request, *args, **kwargs):
         """Override destroy to return proper response"""
         instance = self.get_object()
@@ -67,6 +81,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
+    @require_permissions('permissions.update')
     def restore(self, request, pk=None):
         """Restore a soft-deleted permission"""
         try:
@@ -157,6 +172,14 @@ class RoleViewSet(viewsets.ModelViewSet):
             return RoleCreateUpdateSerializer
         return RoleSerializer
 
+    @require_permissions('roles.read')
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @require_permissions('roles.read')
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
     def perform_destroy(self, instance):
         """Soft delete the role if it's not a system role"""
         if instance.is_system_role:
@@ -170,6 +193,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
+    @require_permissions('roles.update')
     def restore(self, request, pk=None):
         """Restore a soft-deleted role"""
         try:
@@ -189,6 +213,7 @@ class RoleViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['post'], url_path='assign-permissions')
+    @require_permissions('roles.update', 'permissions.update')
     def assign_permissions(self, request):
         """
         Assign permissions to a role
@@ -268,6 +293,7 @@ class RoleViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], url_path='revoke-permissions')
+    @require_permissions('roles.update', 'permissions.update')
     def revoke_permissions(self, request):
         """
         Revoke permissions from a role
@@ -351,6 +377,7 @@ class UserRoleViewSet(viewsets.ViewSet):
         }
 
     @action(detail=False, methods=['post'], url_path='assign-roles')
+    @require_permissions('roles.update', 'users.update')
     def assign_roles(self, request):
         """
         Assign roles to a user
@@ -438,6 +465,7 @@ class UserRoleViewSet(viewsets.ViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], url_path='revoke-roles')
+    @require_permissions('roles.update', 'users.update')
     def revoke_roles(self, request):
         """
         Revoke roles from a user
@@ -495,6 +523,7 @@ class UserRoleViewSet(viewsets.ViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['get'], url_path='user/(?P<user_id>[^/.]+)')
+    @require_permissions('roles.read', 'users.read')
     def get_user_roles(self, request, user_id=None):
         """
         Get a user with their roles and permissions
@@ -539,6 +568,7 @@ class UserRoleViewSet(viewsets.ViewSet):
         methods=['get'],
         url_path='role/(?P<role_id>[^/.]+)/users'
     )
+    @require_permissions('roles.read', 'users.read')
     def get_role_users(self, request, role_id=None):
         """
         Get all users assigned to a specific role
