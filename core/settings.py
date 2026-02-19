@@ -282,12 +282,12 @@ SIMPLE_JWT = {
 # EMAIL_HOST_PASSWORD = os.getenv('EMAIL_PASSWORD')
 
 DEFAULT_FROM_EMAIL = os.getenv('SUBSCRIPTION_NOTIFICATION_EMAIL')
+
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
 # ============ CELERY CONFIGURATION ============
-# Add at the end of settings.py
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = os.getenv(
     'CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
