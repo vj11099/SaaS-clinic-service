@@ -79,7 +79,7 @@ class SubscriptionHistoryAdmin(admin.ModelAdmin):
         'created_at',
     ]
     ordering = ['-created_at']
-    date_hierarchy = 'created_at'
+    # date_hierarchy = 'created_at'
 
     fieldsets = (
         ('Subscription Details', {
@@ -118,9 +118,9 @@ class SubscriptionHistoryAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Disable deletion of history records"""
         return False
-#
-#
-# # Optional: Inline admin for Organization model
+
+
+# Optional: Inline admin for Organization model
 # class SubscriptionHistoryInline(admin.TabularInline):
 #     model = SubscriptionHistory
 #     extra = 0
