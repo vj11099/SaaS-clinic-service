@@ -25,7 +25,6 @@ class PermissionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Permission name cannot be empty.")
 
-        # FIX: Check uniqueness excluding current instance on update
         name = value.strip()
         queryset = Permission.objects.filter(name=name, is_deleted=False)
         if self.instance:
@@ -67,7 +66,6 @@ class RoleSerializer(serializers.ModelSerializer):
 
     def get_permission_count(self, obj):
         """Get count of active permissions"""
-        # FIX: Also filter through table for accurate count
         # OPTIMIZATION: Use hasattr to check if permissions are already prefetched
         if hasattr(obj, '_prefetched_objects_cache') and 'permissions' in obj._prefetched_objects_cache:
             # If prefetched, count the cached results (already filtered)
@@ -86,7 +84,6 @@ class RoleSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Role name cannot be empty.")
 
-        # FIX: Check uniqueness excluding current instance on update
         name = value.strip()
         queryset = Role.objects.filter(name=name, is_deleted=False)
         if self.instance:
@@ -126,7 +123,6 @@ class RoleCreateUpdateSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Role name cannot be empty.")
 
-        # FIX: Check uniqueness excluding current instance on update
         name = value.strip()
         queryset = Role.objects.filter(name=name, is_deleted=False)
         if self.instance:
@@ -169,7 +165,6 @@ class RolePermissionSerializer(serializers.Serializer):
                 "At least one permission is required."
             )
 
-        # FIX: Remove duplicates from input
         value = list(set(value))
 
         existing_permissions = Permission.objects.filter(
@@ -209,7 +204,6 @@ class UserRoleSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("At least one role is required.")
 
-        # FIX: Remove duplicates from input
         value = list(set(value))
 
         existing_roles = Role.objects.filter(
@@ -273,7 +267,6 @@ class RoleWithPermissionsDetailSerializer(serializers.ModelSerializer):
 
     def get_users_count(self, obj):
         """Get count of users with this role"""
-        # FIX: Filter both UserRole fields
         # OPTIMIZATION: Use reverse query from role_users (the actual related_name)
         return obj.user_roles.filter(
             user__is_active=True,

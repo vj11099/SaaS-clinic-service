@@ -35,8 +35,8 @@ class DocumentService:
 
         # Check MIME type
         mime_type = mimetypes.guess_type(file.name)[0]
-        allowed_types = getattr(
-            settings, 'ALLOWED_DOCUMENT_TYPES', ['application/pdf'])
+        allowed_types = ['application/pdf']
+
         if mime_type not in allowed_types:
             return False, "Invalid file type. Only PDF files are allowed."
 

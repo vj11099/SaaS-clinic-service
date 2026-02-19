@@ -18,7 +18,7 @@ class OrganizationAdmin(admin.ModelAdmin):
             'fields': ('contact_email', 'contact_phone')
         }),
         ('Settings', {
-            'fields': ('max_users', 'is_active')
+            'fields': ('is_active',)
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),

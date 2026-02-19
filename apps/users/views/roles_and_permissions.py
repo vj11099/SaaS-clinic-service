@@ -123,18 +123,14 @@ class RoleViewSet(viewsets.ModelViewSet):
         queryset = Role.objects.filter(is_deleted=False)
 
         if self.action in ['list', 'retrieve']:
-            # FIX #1: CRITICAL BUG - Filter through RolePermission table to exclude soft-deleted relationships
-            # This was causing revoked permissions to still appear
             queryset = queryset.prefetch_related(
                 Prefetch(
                     'permissions',
                     queryset=Permission.objects.filter(
                         is_active=True,
                         is_deleted=False,
-                        # CRITICAL: Filter the through table to exclude soft-deleted relationships
                         rolepermission__is_active=True,
                         rolepermission__is_deleted=False
-                        # Use distinct to avoid duplicates from through table joins
                     ).distinct()
                 )
             )
@@ -236,7 +232,6 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 )
 
-                # FIX #2: Validate that we found all requested permissions
                 if len(permissions) != len(permission_ids):
                     found_ids = set(permissions.values_list('id', flat=True))
                     missing_ids = set(permission_ids) - found_ids
@@ -262,7 +257,6 @@ class RoleViewSet(viewsets.ModelViewSet):
                             update_fields=['is_deleted', 'is_active', 'updated_at'])
                         assigned_count += 1
 
-                # FIX #3: Re-fetch with proper prefetch instead of refresh_from_db()
                 # refresh_from_db() doesn't reload M2M relationships properly
                 role = Role.objects.prefetch_related(
                     Prefetch(
@@ -318,7 +312,6 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                # FIX #4: Re-fetch with proper prefetch instead of refresh_from_db()
                 role = Role.objects.prefetch_related(
                     Prefetch(
                         'permissions',

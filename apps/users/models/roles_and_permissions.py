@@ -51,7 +51,6 @@ class Role(BaseAuditTrailModel):
 
     def has_permission(self, permission_name):
         """Check if role has a specific permission"""
-        # FIX: Also check the through table
         return self.permissions.filter(
             name=permission_name,
             is_active=True,
@@ -69,7 +68,6 @@ class Role(BaseAuditTrailModel):
         - The role's permissions are changed (via RolePermission signals)
         - The role itself is modified (via Role signals)
         """
-        # FIX: Also check the through table
         # OPTIMIZATION: Use values_list directly for minimal query
         return list(
             self.permissions.filter(
@@ -92,7 +90,6 @@ class RolePermission(BaseAuditTrailModel):
     class Meta:
         db_table = 'role_permissions'
         unique_together = [('role', 'permission')]
-        # FIX & OPTIMIZATION: Add indexes for soft-delete queries
         indexes = [
             models.Index(fields=['role', 'is_deleted', 'is_active']),
             models.Index(fields=['permission', 'is_deleted', 'is_active']),
@@ -112,7 +109,6 @@ class UserRole(BaseAuditTrailModel):
     user = models.ForeignKey(
         'users.User',
         on_delete=models.CASCADE,
-        # FIX: Changed from 'role_users' to 'user_roles' to match User model expectation
         # The User model has: through='UserRole', so it expects 'user_roles' as related_name
         related_name='user_roles'
     )
@@ -128,7 +124,6 @@ class UserRole(BaseAuditTrailModel):
     class Meta:
         db_table = 'user_roles'
         unique_together = [('user', 'role')]
-        # FIX & OPTIMIZATION: Add indexes for soft-delete queries
         indexes = [
             models.Index(fields=['user', 'is_deleted', 'is_active']),
             models.Index(fields=['role', 'is_deleted', 'is_active']),

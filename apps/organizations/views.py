@@ -156,6 +156,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
             schema_name=validated_data['organization_schema_name'],
             contact_email=validated_data['contact_email'],
             contact_phone=validated_data.get('contact_phone', ''),
+            is_active=True
         )
 
     def _create_domain(self, organization):
@@ -201,7 +202,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
         """
         Assign subscription plan to organization
         """
-        # Activate paid plan immediately
+        # Activate plan immediately
         # Note: In future verify payment first
         SubscriptionService.subscribe(
             organization=organization,
