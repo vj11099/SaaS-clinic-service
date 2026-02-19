@@ -141,15 +141,3 @@ from .models import SubscriptionPlan, SubscriptionHistory
 #
 #     def has_add_permission(self, request, obj=None):
 #         return False
-
-
-"""
-Add to your organizations/admin.py:
-
-from subscriptions.admin import SubscriptionHistoryInline
-
-@admin.register(Organization)
-class OrganizationAdmin(admin.ModelAdmin):
-    ...
-    inlines = [SubscriptionHistoryInline]
-"""

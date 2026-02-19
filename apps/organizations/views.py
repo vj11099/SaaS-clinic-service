@@ -124,7 +124,7 @@ class OrganizationRegisterView(generics.CreateAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def _get_subscription_plan():
+    def _get_subscription_plan(self):
         """Get subscription plan from request plan"""
         try:
             return SubscriptionPlan.objects.get(
