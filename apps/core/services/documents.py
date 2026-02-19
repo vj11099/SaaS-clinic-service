@@ -19,7 +19,7 @@ class DocumentService:
         overriding the model's upload_to='documents/' default.
         """
         schema_name = connection.schema_name
-        return f'documents/{schema_name}/{patient_id}/{filename}'
+        return f'{schema_name}/{patient_id}/{filename}'
 
     @staticmethod
     def validate_file(file):

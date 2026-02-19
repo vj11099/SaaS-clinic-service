@@ -160,63 +160,63 @@ def process_document_task(self, document_id, schema_name=None):
 #     logger.info("Orphaned files cleanup not yet implemented for R2 storage")
 
 
-@shared_task
-def cleanup_deleted_documents():
-    """
-    Periodic task to permanently remove soft-deleted documents older than 30 days.
-    Deletes the file from R2 then removes the DB record.
-
-    Should be run periodically via celery beat.
-    """
-    from django.utils import timezone
-    from datetime import timedelta
-    from django_tenants.utils import get_tenant_model
-
-    logger.info("Starting deleted documents cleanup")
-
-    try:
-        TenantModel = get_tenant_model()
-        tenants = TenantModel.objects.filter(is_active=True)
-
-        retention_days = 30
-        cutoff_date = timezone.now() - timedelta(days=retention_days)
-        total_cleaned = 0
-
-        for tenant in tenants:
-            with schema_context(tenant.schema_name):
-                from apps.core.models.documents import Document
-
-                old_deleted = Document.all_objects.filter(
-                    is_deleted=True,
-                    deleted_at__lt=cutoff_date
-                )
-
-                count = old_deleted.count()
-                if count == 0:
-                    continue
-
-                logger.info(f"Cleaning {count} old deleted documents in schema {
-                            tenant.schema_name}")
-
-                # Delete file from R2 before removing DB record
-                for document in old_deleted:
-                    if document.file:
-                        try:
-                            document.file.delete(save=False)
-                        except Exception as e:
-                            logger.warning(
-                                f"Could not delete R2 file for document {
-                                    document.id}: {str(e)}"
-                            )
-
-                old_deleted.is_deleted = True
-                old_deleted.save()
-                total_cleaned += count
-
-        logger.info(f"Deleted documents cleanup completed. Total cleaned: {
-                    total_cleaned}")
-
-    except Exception as e:
-        logger.error(f"Error during deleted documents cleanup: {
-                     str(e)}", exc_info=True)
-        raise
+# @shared_task
+# def cleanup_deleted_documents():
+#     """
+#     Periodic task to permanently remove soft-deleted documents older than 30 days.
+#     Deletes the file from R2 then removes the DB record.
+#
+#     Should be run periodically via celery beat.
+#     """
+#     from django.utils import timezone
+#     from datetime import timedelta
+#     from django_tenants.utils import get_tenant_model
+#
+#     logger.info("Starting deleted documents cleanup")
+#
+#     try:
+#         TenantModel = get_tenant_model()
+#         tenants = TenantModel.objects.filter(is_active=True)
+#
+#         retention_days = 30
+#         cutoff_date = timezone.now() - timedelta(days=retention_days)
+#         total_cleaned = 0
+#
+#         for tenant in tenants:
+#             with schema_context(tenant.schema_name):
+#                 from apps.core.models.documents import Document
+#
+#                 old_deleted = Document.all_objects.filter(
+#                     is_deleted=True,
+#                     deleted_at__lt=cutoff_date
+#                 )
+#
+#                 count = old_deleted.count()
+#                 if count == 0:
+#                     continue
+#
+#                 logger.info(f"Cleaning {count} old deleted documents in schema {
+#                             tenant.schema_name}")
+#
+#                 # Delete file from R2 before removing DB record
+#                 for document in old_deleted:
+#                     if document.file:
+#                         try:
+#                             document.file.delete(save=False)
+#                         except Exception as e:
+#                             logger.warning(
+#                                 f"Could not delete R2 file for document {
+#                                     document.id}: {str(e)}"
+#                             )
+#
+#                 old_deleted.is_deleted = True
+#                 old_deleted.save()
+#                 total_cleaned += count
+#
+#         logger.info(f"Deleted documents cleanup completed. Total cleaned: {
+#                     total_cleaned}")
+#
+#     except Exception as e:
+#         logger.error(f"Error during deleted documents cleanup: {
+#                      str(e)}", exc_info=True)
+#         raise

@@ -248,14 +248,6 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend'
     ],
-    # 'DEFAULT_THROTTLE_CLASSES': [
-    #     'core.throttling.TenantAnonRateThrottle',
-    #     'core.throttling.TenantUserRateThrottle',
-    # ],
-    # 'DEFAULT_THROTTLE_RATES': {
-    #     'tenant_anon': '100/day',
-    #     'tenant_user': '1000/day',
-    # }
 }
 
 SWAGGER_SETTINGS = {
@@ -374,12 +366,12 @@ STORAGES = {
 }
 
 
-# AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
-# AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-# AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
-# AWS_S3_ENDPOINT_URL = os.getenv('R2_ENDPOINT_URL')
-# AWS_S3_REGION_NAME = 'auto'
-# AWS_DEFAULT_ACL = 'private'         # never expose files publicly
-# AWS_QUERYSTRING_AUTH = True         # enable signed URLs
-# AWS_QUERYSTRING_EXPIRE = 3600       # signed URL expiry in seconds (1 hour)
-# AWS_S3_FILE_OVERWRITE = False       # never overwrite files with the same name
+AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+AWS_S3_ENDPOINT_URL = os.getenv('R2_ENDPOINT_URL')
+AWS_S3_REGION_NAME = 'auto'
+AWS_DEFAULT_ACL = 'private'         # never expose files publicly
+AWS_QUERYSTRING_AUTH = True         # enable signed URLs
+AWS_QUERYSTRING_EXPIRE = 3600       # signed URL expiry in seconds (1 hour)
+AWS_S3_FILE_OVERWRITE = False       # never overwrite files with the same name
