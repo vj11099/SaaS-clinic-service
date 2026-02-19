@@ -3,7 +3,7 @@ from ..models.patients import Patient
 from ..serializers.patients import PatientSerializer
 from ..services.patients import PatientFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters
+# from rest_framework import filters
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework import viewsets
@@ -14,7 +14,7 @@ from apps.permissions import require_permissions
 class PatientViews(viewsets.ModelViewSet):
     serializer_class = PatientSerializer
     permission_classes = [IsOrganizationMember]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend]
     filterset_class = PatientFilter
     queryset = Patient.objects.all()
 

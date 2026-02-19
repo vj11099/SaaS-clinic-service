@@ -137,27 +137,27 @@ def process_document_task(self, document_id, schema_name=None):
         }
 
 
-@shared_task
-def cleanup_orphaned_files():
-    """
-    Periodic task to clean up orphaned files in R2
-    (files that exist in R2 but have no corresponding DB record)
-
-    TODO: Implementation requires listing R2 bucket objects and
-    cross-referencing with the database across all tenant schemas.
-    Use boto3 S3 client with paginator to list objects:
-
-        s3 = boto3.client('s3', ...)
-        paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=settings.AWS_STORAGE_BUCKET_NAME):
-            for obj in page.get('Contents', []):
-                # parse schema + patient_id from obj['Key']
-                # check if document exists in that tenant schema
-                # delete from R2 if no DB record found
-
-    Should be run periodically via celery beat.
-    """
-    logger.info("Orphaned files cleanup not yet implemented for R2 storage")
+# @shared_task
+# def cleanup_orphaned_files():
+#     """
+#     Periodic task to clean up orphaned files in R2
+#     (files that exist in R2 but have no corresponding DB record)
+#
+#     TODO: Implementation requires listing R2 bucket objects and
+#     cross-referencing with the database across all tenant schemas.
+#     Use boto3 S3 client with paginator to list objects:
+#
+#         s3 = boto3.client('s3', ...)
+#         paginator = s3.get_paginator('list_objects_v2')
+#         for page in paginator.paginate(Bucket=settings.AWS_STORAGE_BUCKET_NAME):
+#             for obj in page.get('Contents', []):
+#                 # parse schema + patient_id from obj['Key']
+#                 # check if document exists in that tenant schema
+#                 # delete from R2 if no DB record found
+#
+#     Should be run periodically via celery beat.
+#     """
+#     logger.info("Orphaned files cleanup not yet implemented for R2 storage")
 
 
 @shared_task
@@ -209,7 +209,8 @@ def cleanup_deleted_documents():
                                     document.id}: {str(e)}"
                             )
 
-                old_deleted.delete()
+                old_deleted.is_deleted = True
+                old_deleted.save()
                 total_cleaned += count
 
         logger.info(f"Deleted documents cleanup completed. Total cleaned: {
