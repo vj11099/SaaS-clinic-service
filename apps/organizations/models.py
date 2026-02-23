@@ -71,7 +71,7 @@ class Organization(TenantMixin):
     cancellation_reason = models.TextField(blank=True, null=True)
 
     auto_create_schema = True
-    auto_drop_schema = False
+    auto_drop_schema = True
 
     class Meta:
         db_table = 'organizations'

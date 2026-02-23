@@ -4,6 +4,31 @@ from django.conf import settings
 from django.utils.html import strip_tags
 
 
+def send_registration_email(name, email):
+    subject = 'Organization Registration'
+
+    # HTML email template
+    html_message = f"""
+    <html>
+        <body>
+            <h2>Hello {name}!</h2>
+            <p>This mail is to inform you that your organization is being registered</p>
+            <p>Please be patient while your organization is being created</p>
+            <p>You will recieve a mail shortly for your credentials </p>
+            <p>If you didn't create this account, please ignore this email.</p>
+        </body>
+    </html>
+    """
+
+    plain_message = strip_tags(html_message)
+
+    mail_thread = threading.Thread(
+        target=send_email_wrapper,
+        args=(subject, plain_message, [email], html_message)
+    )
+    mail_thread.start()
+
+
 def send_verification_email(user, generated_password):
 
     # Build verification URL
