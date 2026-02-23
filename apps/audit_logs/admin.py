@@ -3,7 +3,7 @@ from .models import RequestLog
 
 
 @admin.register(RequestLog)
-class UserAdmin(admin.ModelAdmin):
+class RequestLogAdmin(admin.ModelAdmin):
     actions = None
     list_display = [
         'method', 'path', 'user', 'status_code', 'is_failed',

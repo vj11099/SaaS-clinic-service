@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from .roles_and_permissions import Role, Permission
 from utils.caching import cached, CacheConfig
+from rich import inspect
 
 
 class User(AbstractUser):
@@ -58,6 +59,7 @@ class User(AbstractUser):
     @cached(CacheConfig.USER_PERMISSIONS, timeout=900)
     def get_all_permissions(self):
         """Get all permissions from all user's roles"""
+        # inspect(self)
         # permissions = set()
         # for user_role in self.user_roles.select_related('role').all():
         #     if user_role.role.is_active and not user_role.role.is_deleted:

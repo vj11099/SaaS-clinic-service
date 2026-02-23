@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from functools import wraps
 from rest_framework import permissions
+from rich import inspect
 
 
 class HasPermission(permissions.BasePermission):
@@ -15,6 +16,8 @@ class HasPermission(permissions.BasePermission):
     message = "Access denied."
 
     def has_permission(self, request, view):
+        # inspect(request.user)
+        # inspect(self)
         if not request.user or not request.user.is_authenticated:
             self.message = "You must be logged in to perform this action."
             return False

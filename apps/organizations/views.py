@@ -8,6 +8,7 @@ from utils.registration_mail import send_verification_email
 from .serializers import OrganizationRegisterSerializer
 from rest_framework import status, permissions, generics
 from ..subscriptions.services import SubscriptionService
+from apps.users.models import User, Role, UserRole
 
 
 class OrganizationRegisterView(generics.CreateAPIView):
@@ -180,7 +181,6 @@ class OrganizationRegisterView(generics.CreateAPIView):
     def _create_admin_user(self, organization, validated_data):
         """Create admin user and generate password in correct schema"""
         with schema_context(organization.schema_name):
-            from apps.users.models import User
 
             # Create user
             admin_user = User.objects.create_user(
@@ -195,6 +195,13 @@ class OrganizationRegisterView(generics.CreateAPIView):
             # Generate password WHILE STILL in schema context
             generated_password = admin_user.generate_password()
 
+            admin_role = Role.objects.get(
+                name='superuser', is_system_role=True)
+            UserRole.objects.get_or_create(
+                user=admin_user,
+                role=admin_role,
+                defaults={'is_active': True, 'is_deleted': False}
+            )
             # Store password for email (return as tuple)
             return admin_user, generated_password
 
