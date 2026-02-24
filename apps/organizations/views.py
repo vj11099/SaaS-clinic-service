@@ -3,12 +3,11 @@ from rest_framework.response import Response
 from .serializers import OrganizationRegisterSerializer
 from django.db import connection
 from .tasks import register_organization_async
-# views.py
 
 
 class OrganizationRegisterView(generics.CreateAPIView):
     """
-    Register a new organization (tenant) with subscription plan.
+    Register a new organization (tenant) with `trial` subscription plan.
 
     Returns 202 immediately after validation.
     Everything else runs in a background Celery task:

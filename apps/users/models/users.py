@@ -8,7 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from .roles_and_permissions import Role, Permission
 from utils.caching import cached, CacheConfig
-from rich import inspect
+# from rich import inspect
 
 
 class User(AbstractUser):

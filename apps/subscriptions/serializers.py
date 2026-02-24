@@ -93,7 +93,8 @@ class OrganizationSubscriptionSerializer(serializers.ModelSerializer):
     """
 
     plan = SubscriptionPlanSerializer(
-        source='subscription_plan', read_only=True)
+        source='subscription_plan', read_only=True
+    )
     days_until_expiry = serializers.IntegerField(read_only=True)
     is_active = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()

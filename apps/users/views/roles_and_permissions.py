@@ -240,6 +240,7 @@ class RoleViewSet(viewsets.ModelViewSet):
                             ', '.join(map(str, missing_ids))}"
                     )
 
+                # TODO: fix N+1 for here
                 assigned_count = 0
                 for permission in permissions:
                     role_perm, created = RolePermission.objects.get_or_create(
@@ -398,6 +399,7 @@ class UserRoleViewSet(viewsets.ViewSet):
                         f"Roles not found: {', '.join(map(str, missing_ids))}"
                     )
 
+                # TODO: fix N+1 for here
                 assigned_count = 0
                 for role in roles:
                     user_role, created = UserRole.objects.get_or_create(

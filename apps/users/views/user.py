@@ -2,9 +2,10 @@ from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from ..serializers import (
     LoginSerializer, RegisterSerializer, UserSerializer,
-    ResetPasswordSerializer
+    ResetPasswordSerializer, SubscriptionAwareTokenRefreshSerializer
 )
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from apps.permissions import HasPermission
 from rest_framework import (
     permissions, generics, status, viewsets, exceptions, views
@@ -247,3 +248,11 @@ class LogoutView(views.APIView):
                 {"error": "An error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class SubscriptionAwareTokenRefreshView(TokenRefreshView):
+    """
+    Drop-in replacement for simplejwt's TokenRefreshView.
+    Points to our custom serializer — nothing else changes.
+    """
+    serializer_class = SubscriptionAwareTokenRefreshSerializer

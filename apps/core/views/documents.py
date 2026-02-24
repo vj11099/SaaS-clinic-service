@@ -87,6 +87,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         document = serializer.save()
 
         schema_name = connection.schema_name
+
         from apps.core.tasks import process_document_task
         process_document_task.delay(document.id, schema_name)
 

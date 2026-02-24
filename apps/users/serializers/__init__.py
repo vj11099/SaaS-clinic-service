@@ -1,11 +1,12 @@
 from .users import (
     RegisterSerializer, ResetPasswordSerializer,
-    UserSerializer, LoginSerializer
+    UserSerializer, LoginSerializer, SubscriptionAwareTokenRefreshSerializer
 )
 
 __all__ = [
     'RegisterSerializer',
     'ResetPasswordSerializer',
     'UserSerializer',
-    'LoginSerializer'
+    'LoginSerializer',
+    'SubscriptionAwareTokenRefreshSerializer'
 ]

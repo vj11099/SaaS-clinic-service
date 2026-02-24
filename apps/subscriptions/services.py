@@ -1,6 +1,7 @@
 # from datetime import timedelta
 # from django.utils import timezone
 # from ..organizations.models import Organization
+from django.utils import timezone
 from django.db import transaction
 from .models import SubscriptionPlan, SubscriptionHistory
 from ..organizations.revenue_services import RevenueService
@@ -198,6 +199,7 @@ class SubscriptionService:
 
         # If immediate cancellation, suspend now
         if immediate:
+            organization.subscription_end_date = timezone.now()
             organization.subscription_status = 'suspended'
             organization.is_active = False
             organization.save()
@@ -215,8 +217,6 @@ class SubscriptionService:
             },
             notes=reason or "Subscription cancelled"
         )
-
-        # Note: No revenue record for cancellations
 
         return organization
 

@@ -25,17 +25,15 @@ def register_organization_async(self, validated_data):
     organization = None
 
     try:
-        # Step 1: Registration email (org exists, inform user it's being set up)
+        # Registration email (inform user organization is being set up)
         send_registration_email(
             validated_data['username'],
             validated_data['contact_email']
         )
 
-        # Step 2 & 3: Org + Domain (outside atomic — django-tenants needs its own tx)
         organization = _create_organization(validated_data)
         _create_domain(organization)
 
-        # Step 4 & 5: Admin user + subscription (wrapped in atomic)
         with transaction.atomic():
             admin_user, generated_password = _create_admin_user(
                 organization, validated_data
@@ -44,7 +42,7 @@ def register_organization_async(self, validated_data):
                 organization, validated_data['email']
             )
 
-        # Step 6: Verification email with credentials
+        # Verification email with credentials
         send_verification_email(admin_user, generated_password)
 
         logger.info(
@@ -67,7 +65,7 @@ def register_organization_async(self, validated_data):
 
         try:
             raise self.retry(exc=exc, countdown=2 **
-                             self.request.retries)  # 1s, 2s, 4s
+                             self.request.retries)
         except self.MaxRetriesExceededError:
             logger.critical(
                 f"[CRITICAL] register_organization_async permanently failed for "
@@ -177,7 +175,7 @@ def _cleanup_organization(organization):
             f"Cleanup: deleted org + schema '{organization.schema_name}'"
         )
     except Exception as cleanup_exc:
-        # Cleanup itself failed — log loudly, needs manual intervention
+        # Cleanup itself failed
         logger.critical(
             f"[CRITICAL] Cleanup failed for schema='{
                 organization.schema_name}': "

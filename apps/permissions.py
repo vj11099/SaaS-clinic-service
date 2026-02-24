@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from functools import wraps
 from rest_framework import permissions
-from rich import inspect
+# from rich import inspect
 
 
 class HasPermission(permissions.BasePermission):
