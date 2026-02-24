@@ -93,15 +93,14 @@ class LoginSerializer(TokenObtainPairSerializer):
                 "Please contact admin to regain access."
             )
 
-        if user is None:
-            try:
-                _user = authenticate(
-                    request=self.context.get('request'),
-                    username=user.username,
-                    password=password
-                )
-            except User.DoesNotExist:
-                _user = None
+        try:
+            _user = authenticate(
+                request=self.context.get('request'),
+                username=user.username,
+                password=password
+            )
+        except User.DoesNotExist:
+            _user = None
 
         if not _user:
             raise serializers.ValidationError("Invalid credentials")
