@@ -1,12 +1,12 @@
 from .user import (
-    RegisterUserView, VerifyUserView, UserViewSet, LoginView, ResetPasswordView,
+    RegisterUserView, VerifyUserView, RestoreUserViewSet, LoginView, ResetPasswordView,
     LogoutView, SubscriptionAwareTokenRefreshView
 )
 
 __all__ = [
     'RegisterUserView',
     'VerifyUserView',
-    'UserViewSet',
+    'RestoreUserViewSet',
     'LoginView',
     'ResetPasswordView',
     'LogoutView',

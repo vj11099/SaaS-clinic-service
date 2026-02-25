@@ -1,14 +1,15 @@
 from django.conf import settings
 from rest_framework_simplejwt.views import TokenObtainPairView
 from ..serializers import (
-    LoginSerializer, RegisterSerializer, UserSerializer,
+    LoginSerializer, RegisterSerializer, RestoreUserSerializer,
     ResetPasswordSerializer, SubscriptionAwareTokenRefreshSerializer
 )
+from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
-from apps.permissions import HasPermission
+from apps.permissions import HasPermission, require_tenant_admin
 from rest_framework import (
-    permissions, generics, status, viewsets, exceptions, views
+    permissions, generics, status, viewsets, exceptions, views, mixins
 )
 from rest_framework.response import Response
 from ..models import User
@@ -151,16 +152,61 @@ class VerifyUserView(generics.UpdateAPIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class RestoreUserViewSet(viewsets.GenericViewSet):
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = RestoreUserSerializer
 
-    def perform_create(self, serializer):
-        raise exceptions.Http404()
+    @action(detail=True, methods=['post'], url_path='restore-user')
+    @require_tenant_admin
+    def restore_user(self, request, pk=None):
+        tenant = connection.tenant
 
-    def perform_destroy(self, instance):
-        instance.is_active = False
-        instance.save()
+        # Pull these up front so they're available in both branches below.
+        plan = tenant.subscription_plan
+        member_limit = tenant.get_member_limit()
+        current_count = tenant.current_member_count
+
+        try:
+            user = User.objects.get(pk=pk, is_active=False)
+            if not tenant.can_add_member():
+                if not plan or not tenant.is_subscription_active():
+                    error_message = "No active subscription plan found."
+                else:
+                    error_message = (
+                        f"Your current plan ({plan.name}) allows a maximum of "
+                        f"{member_limit if member_limit != -1 else 'unlimited'} "
+                        f"active members. You currently have {current_count}."
+                    )
+                return Response(
+                    {
+                        "error": "Cannot restore member",
+                        "message": error_message,
+                        "current_count": current_count,
+                        "limit": member_limit,
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            user.is_active = True
+            user.save(update_fields=['is_active', 'updated_at'])
+
+            tenant.current_member_count += 1
+            tenant.save(update_fields=['current_member_count', 'updated_at'])
+
+            serializer = self.get_serializer(user)
+            return Response(
+                {
+                    "message": "User restored successfully.",
+                    "user": serializer.data,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found or already active."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class LoginView(TokenObtainPairView):

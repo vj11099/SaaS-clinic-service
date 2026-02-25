@@ -1,6 +1,7 @@
 from rest_framework import (
     viewsets, serializers, status
 )
+from django.utils import timezone
 from apps.permissions import (
     CanManagePermissions, CanManageRoles, CanAssignRoles)
 from rest_framework.decorators import action
@@ -224,58 +225,60 @@ class RoleViewSet(viewsets.ModelViewSet):
         role_id = serializer.validated_data['role_id']
         permission_ids = serializer.validated_data['permission_ids']
 
-        try:
-            with transaction.atomic():
-                role = Role.objects.get(id=role_id, is_deleted=False)
-                permissions = Permission.objects.filter(
-                    id__in=permission_ids,
-                    is_deleted=False
-                )
+        role = Role.objects.get(id=role_id, is_deleted=False)
+        permissions = Permission.objects.filter(
+            id__in=permission_ids,
+            is_deleted=False
+        )
 
-                if len(permissions) != len(permission_ids):
-                    found_ids = set(permissions.values_list('id', flat=True))
-                    missing_ids = set(permission_ids) - found_ids
-                    raise serializers.ValidationError(
-                        f"Permissions not found: {
-                            ', '.join(map(str, missing_ids))}"
-                    )
+        if len(permissions) != len(permission_ids):
+            found_ids = set(permissions.values_list('id', flat=True))
+            missing_ids = set(permission_ids) - found_ids
+            raise serializers.ValidationError(
+                f"Permissions not found: {
+                    ', '.join(map(str, missing_ids))}"
+            )
 
-                # TODO: fix N+1 for here
-                assigned_count = 0
-                for permission in permissions:
-                    role_perm, created = RolePermission.objects.get_or_create(
+        existing = RolePermission.objects.filter(
+            role=role,
+            permission__in=permissions
+        ).select_related('permission')
+
+        existing_map = {rp.permission_id: rp for rp in existing}
+
+        to_create = []
+        to_restore = []
+
+        for permission in permissions:
+            rp = existing_map.get(permission.id)
+            if rp is None:
+                to_create.append(
+                    RolePermission(
                         role=role,
                         permission=permission,
-                        defaults={'is_active': True, 'is_deleted': False}
+                        is_active=True,
+                        is_deleted=False
                     )
-                    if created:
-                        assigned_count += 1
-                    elif role_perm.is_deleted:
-                        # Restore previously deleted relationship
-                        role_perm.is_deleted = False
-                        role_perm.is_active = True
-                        role_perm.save(
-                            update_fields=['is_deleted', 'is_active', 'updated_at'])
-                        assigned_count += 1
+                )
+            elif rp.is_deleted:
+                rp.is_deleted = False
+                rp.is_active = True
+                rp.updated_at = timezone.now()
+                to_restore.append(rp)
+        try:
+            with transaction.atomic():
+                if len(to_create) > 0:
+                    RolePermission.objects.bulk_create(
+                        to_create, ignore_conflicts=False)
 
-                # refresh_from_db() doesn't reload M2M relationships properly
-                role = Role.objects.prefetch_related(
-                    Prefetch(
-                        'permissions',
-                        queryset=Permission.objects.filter(
-                            is_active=True,
-                            is_deleted=False,
-                            rolepermission__is_active=True,
-                            rolepermission__is_deleted=False
-                        ).distinct()
-                    )
-                ).get(id=role_id)
+                if len(to_restore) > 0:
+                    RolePermission.objects.bulk_update(
+                        to_restore, fields=['is_deleted', 'is_active', 'updated_at'])
 
-                serializer = RoleWithPermissionsDetailSerializer(role)
+                assigned_count = len(to_create) + len(to_restore)
 
                 return Response({
-                    'message': f'{assigned_count} permission(s) assigned to role successfully',
-                    'role': serializer.data
+                    'message': f'{assigned_count} permission(s) assigned to {role.name} successfully',
                 }, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
@@ -313,23 +316,8 @@ class RoleViewSet(viewsets.ModelViewSet):
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                role = Role.objects.prefetch_related(
-                    Prefetch(
-                        'permissions',
-                        queryset=Permission.objects.filter(
-                            is_active=True,
-                            is_deleted=False,
-                            rolepermission__is_active=True,
-                            rolepermission__is_deleted=False
-                        ).distinct()
-                    )
-                ).get(id=role_id)
-
-                serializer = RoleWithPermissionsDetailSerializer(role)
-
                 return Response({
-                    'message': f'{deleted_count} permission(s) revoked from role successfully',
-                    'role': serializer.data
+                    'message': f'{deleted_count} permission(s) revoked from {role.name} successfully',
                 }, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
@@ -382,73 +370,61 @@ class UserRoleViewSet(viewsets.ViewSet):
         user_id = serializer.validated_data['user_id']
         role_ids = serializer.validated_data['role_ids']
 
-        try:
-            with transaction.atomic():
-                user = User.objects.get(id=user_id, is_active=True)
-                roles = Role.objects.filter(
-                    id__in=role_ids,
-                    is_deleted=False,
-                    is_active=True
-                )
+        user = User.objects.get(id=user_id, is_active=True)
+        roles = Role.objects.filter(
+            id__in=role_ids,
+            is_deleted=False,
+            is_active=True
+        )
 
-                # Validate that we found all requested roles
-                if len(roles) != len(role_ids):
-                    found_ids = set(roles.values_list('id', flat=True))
-                    missing_ids = set(role_ids) - found_ids
-                    raise serializers.ValidationError(
-                        f"Roles not found: {', '.join(map(str, missing_ids))}"
-                    )
+        if len(roles) != len(role_ids):
+            found_ids = set(roles.values_list('id', flat=True))
+            missing_ids = set(role_ids) - found_ids
+            raise serializers.ValidationError(
+                f"Roles not found: {', '.join(map(str, missing_ids))}"
+            )
 
-                # TODO: fix N+1 for here
-                assigned_count = 0
-                for role in roles:
-                    user_role, created = UserRole.objects.get_or_create(
+        existing = UserRole.objects.filter(
+            user=user,
+            role__in=roles
+        ).select_related('role')
+
+        existing_map = {ur.role_id: ur for ur in existing}
+
+        to_create = []
+        to_restore = []
+
+        for role in roles:
+            ur = existing_map.get(role.id)
+            if ur is None:
+                to_create.append(
+                    UserRole(
                         user=user,
                         role=role,
-                        defaults={'is_active': True, 'is_deleted': False}
+                        is_active=True,
+                        is_deleted=False,
                     )
-                    if created:
-                        assigned_count += 1
-                    elif user_role.is_deleted:
-                        # Restore previously deleted relationship
-                        user_role.is_deleted = False
-                        user_role.is_active = True
-                        user_role.save(
-                            update_fields=['is_deleted',
-                                           'is_active', 'updated_at']
-                        )
-                        assigned_count += 1
+                )
+            elif ur.is_deleted:
+                ur.is_deleted = False
+                ur.is_active = True
+                ur.updated_at = timezone.now()
+                to_restore.append(ur)
+        try:
+            with transaction.atomic():
+                if len(to_create) > 0:
+                    UserRole.objects.bulk_create(
+                        to_create, ignore_conflicts=False)
 
-                # Re-fetch user with proper prefetch
-                user = User.objects.prefetch_related(
-                    Prefetch(
-                        'roles',
-                        queryset=Role.objects.filter(
-                            is_active=True,
-                            is_deleted=False,
-                            # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
-                            user_roles__is_active=True,
-                            user_roles__is_deleted=False
-                        ).prefetch_related(
-                            Prefetch(
-                                'permissions',
-                                queryset=Permission.objects.filter(
-                                    is_active=True,
-                                    is_deleted=False,
-                                    rolepermission__is_active=True,
-                                    rolepermission__is_deleted=False
-                                ).distinct()
-                            )
-                        ).distinct()
-                    )
-                ).get(id=user_id)
+                if len(to_restore) > 0:
+                    UserRole.objects.bulk_update(
+                        to_restore, fields=['is_deleted', 'is_active', 'updated_at'])
 
-                serializer = UserWithRolesSerializer(user)
+            assigned_count = len(to_create) + len(to_restore)
 
-                return Response({
-                    'message': f'{assigned_count} role(s) assigned to user successfully',
-                    'user': serializer.data
-                }, status=status.HTTP_200_OK)
+            return Response({
+                'message': f'{assigned_count} role(s) assigned to {user.username} successfully',
+            }, status=status.HTTP_200_OK)
 
         except User.DoesNotExist:
             return Response({
@@ -481,35 +457,8 @@ class UserRoleViewSet(viewsets.ViewSet):
                     is_deleted=False
                 ).update(is_deleted=True, is_active=False)
 
-                # Re-fetch user with proper prefetch
-                user = User.objects.prefetch_related(
-                    Prefetch(
-                        'roles',
-                        queryset=Role.objects.filter(
-                            is_active=True,
-                            is_deleted=False,
-                            # CRITICAL: Use user_roles__ (the related_name from UserRole.role)
-                            user_roles__is_active=True,
-                            user_roles__is_deleted=False
-                        ).prefetch_related(
-                            Prefetch(
-                                'permissions',
-                                queryset=Permission.objects.filter(
-                                    is_active=True,
-                                    is_deleted=False,
-                                    rolepermission__is_active=True,
-                                    rolepermission__is_deleted=False
-                                ).distinct()
-                            )
-                        ).distinct()
-                    )
-                ).get(id=user_id)
-
-                serializer = UserWithRolesSerializer(user)
-
                 return Response({
-                    'message': f'{deleted_count} role(s) revoked from user successfully',
-                    'user': serializer.data
+                    'message': f'{deleted_count} role(s) revoked from {user.username} successfully',
                 }, status=status.HTTP_200_OK)
 
         except User.DoesNotExist:

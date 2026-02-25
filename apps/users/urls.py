@@ -7,7 +7,8 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path, include
 from .views import (
     LoginView, RegisterUserView, LogoutView,
-    VerifyUserView, ResetPasswordView, SubscriptionAwareTokenRefreshView
+    VerifyUserView, ResetPasswordView, SubscriptionAwareTokenRefreshView,
+    RestoreUserViewSet
 )
 # from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -15,6 +16,7 @@ router = DefaultRouter()
 router.register(r'permissions', PermissionViewSet, basename='permission')
 router.register(r'roles', RoleViewSet, basename='role')
 router.register(r'user-roles', UserRoleViewSet, basename='user-role')
+router.register(r'users', RestoreUserViewSet, basename='users')
 
 urlpatterns = [
     path('register/', RegisterUserView.as_view(), name='register'),

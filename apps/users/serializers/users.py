@@ -1,5 +1,5 @@
 from rest_framework.exceptions import PermissionDenied
-from rest_framework_simplejwt.views import TokenRefreshView
+# from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from ..models import User
@@ -7,7 +7,7 @@ from django.db import connection
 from rest_framework import serializers, validators
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
-from rich import inspect
+# from rich import inspect
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -85,6 +85,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             if org.is_active:
                 self._deactivate_org_users(org)
                 self._suspend_org(org)
+                org.current_user_count = 1
                 org.is_active = False
                 org.save()
 
@@ -154,21 +155,11 @@ class LoginSerializer(TokenObtainPairSerializer):
         org.update_subscription_status()
 
 
-class UserSerializer(serializers.ModelSerializer):
+class RestoreUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = (
-            'id', 'username', 'email', 'first_name', 'last_name',
-            'phone', 'date_of_birth',
-        )
-        extra_kwargs = {
-            'phone': {
-                'help_text': 'Enter a 10-digit phone number.',
-                'error_messages': {
-                    'invalid': 'Ensure this value has exactly 10 digits.'
-                }
-            }
-        }
+        fields = ('id', 'email', 'username')
+        read_only_fields = ['id', 'email', 'username']
 
 
 class SubscriptionAwareTokenRefreshSerializer(TokenRefreshSerializer):
@@ -202,6 +193,7 @@ class SubscriptionAwareTokenRefreshSerializer(TokenRefreshSerializer):
             if org.is_active:
                 self._deactivate_org_users(org)
                 self._suspend_org(org)
+                org.current_user_count = 1
                 org.is_active = False
                 org.save()
 
