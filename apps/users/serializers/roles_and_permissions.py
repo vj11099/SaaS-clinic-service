@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from django.db.models import Prefetch
-from ..models import Role, Permission, RolePermission
+from ..models import Role, Permission, User
 
 
 class PermissionSerializer(serializers.ModelSerializer):
@@ -138,86 +137,75 @@ class RoleCreateUpdateSerializer(serializers.ModelSerializer):
 
 class RolePermissionSerializer(serializers.Serializer):
     """Serializer for assigning/removing permissions to/from roles"""
-
-    role_id = serializers.IntegerField(required=True)
+    role = serializers.IntegerField(required=True)
     permission_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=True,
         allow_empty=False
     )
 
-    def validate_role_id(self, value):
-        """Validate that role exists and is not deleted"""
+    def validate_role(self, value):
         try:
             role = Role.objects.get(id=value, is_deleted=False)
-            if role.is_system_role:
-                raise serializers.ValidationError(
-                    "Cannot modify permissions for system roles."
-                )
-            return value
         except Role.DoesNotExist:
             raise serializers.ValidationError("Role not found.")
 
-    def validate_permission_ids(self, value):
-        """Validate that all permissions exist and are not deleted"""
-        if not value:
+        if role.is_system_role:
             raise serializers.ValidationError(
-                "At least one permission is required."
+                "Cannot modify permissions for system roles."
             )
+        return role  # Role object
 
-        value = list(set(value))
+    def validate_permission_ids(self, value):
+        value = list(set(value))  # dedupe IDs first
 
-        existing_permissions = Permission.objects.filter(
+        permissions = Permission.objects.filter(
             id__in=value,
             is_deleted=False
-        ).values_list('id', flat=True)
+        )
 
-        invalid_ids = set(value) - set(existing_permissions)
+        found_ids = set(permissions.values_list('id', flat=True))
+        invalid_ids = set(value) - found_ids
         if invalid_ids:
             raise serializers.ValidationError(
                 f"Invalid permission IDs: {', '.join(map(str, invalid_ids))}"
             )
-        return value
+
+        return list(permissions)  # list of Permission objects, one query total
 
 
 class UserRoleSerializer(serializers.Serializer):
     """Serializer for assigning/removing roles to/from users"""
-
-    user_id = serializers.IntegerField(required=True)
+    user = serializers.IntegerField(required=True)
     role_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=True,
         allow_empty=False
     )
 
-    def validate_user_id(self, value):
-        """Validate that user exists and is active"""
-        from ..models import User
+    def validate_user(self, value):
         try:
-            User.objects.get(id=value, is_active=True)
-            return value
+            return User.objects.get(id=value, is_active=True)
         except User.DoesNotExist:
             raise serializers.ValidationError("User not found or inactive.")
 
     def validate_role_ids(self, value):
-        """Validate that all roles exist and are not deleted"""
-        if not value:
-            raise serializers.ValidationError("At least one role is required.")
+        value = list(set(value))  # dedupe IDs first
 
-        value = list(set(value))
-
-        existing_roles = Role.objects.filter(
+        roles = Role.objects.filter(
             id__in=value,
-            is_deleted=False,
-            is_active=True
-        ).values_list('id', flat=True)
+            is_active=True,
+            is_deleted=False
+        )
 
-        invalid_ids = set(value) - set(existing_roles)
+        found_ids = set(roles.values_list('id', flat=True))
+        invalid_ids = set(value) - found_ids
         if invalid_ids:
             raise serializers.ValidationError(
                 f"Invalid role IDs: {', '.join(map(str, invalid_ids))}"
             )
-        return value
+
+        return list(roles)  # list of Role objects, one query total
 
 
 class UserWithRolesSerializer(serializers.ModelSerializer):

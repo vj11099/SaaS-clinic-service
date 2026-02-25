@@ -212,32 +212,13 @@ class RoleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='assign-permissions')
     @require_permissions('roles.update', 'permissions.update')
     def assign_permissions(self, request):
-        """
-        Assign permissions to a role
-        Body: {
-            "role_id": 1,
-            "permission_ids": [1, 2, 3]
-        }
-        """
+        """Assign permissions to a role"""
         serializer = RolePermissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        role_id = serializer.validated_data['role_id']
-        permission_ids = serializer.validated_data['permission_ids']
-
-        role = Role.objects.get(id=role_id, is_deleted=False)
-        permissions = Permission.objects.filter(
-            id__in=permission_ids,
-            is_deleted=False
-        )
-
-        if len(permissions) != len(permission_ids):
-            found_ids = set(permissions.values_list('id', flat=True))
-            missing_ids = set(permission_ids) - found_ids
-            raise serializers.ValidationError(
-                f"Permissions not found: {
-                    ', '.join(map(str, missing_ids))}"
-            )
+        role = serializer.validated_data['role']
+        # list of Permission objects
+        permissions = serializer.validated_data['permission_ids']
 
         existing = RolePermission.objects.filter(
             role=role,
@@ -253,77 +234,67 @@ class RoleViewSet(viewsets.ModelViewSet):
             rp = existing_map.get(permission.id)
             if rp is None:
                 to_create.append(
-                    RolePermission(
-                        role=role,
-                        permission=permission,
-                        is_active=True,
-                        is_deleted=False
-                    )
+                    RolePermission(role=role, permission=permission,
+                                   is_active=True, is_deleted=False)
                 )
             elif rp.is_deleted:
                 rp.is_deleted = False
                 rp.is_active = True
                 rp.updated_at = timezone.now()
                 to_restore.append(rp)
-        try:
-            with transaction.atomic():
-                if len(to_create) > 0:
-                    RolePermission.objects.bulk_create(
-                        to_create, ignore_conflicts=False)
 
-                if len(to_restore) > 0:
-                    RolePermission.objects.bulk_update(
-                        to_restore, fields=['is_deleted', 'is_active', 'updated_at'])
+        if not to_create and not to_restore:
+            return Response(
+                {'message': 'All permissions are already assigned to this role.'},
+                status=status.HTTP_200_OK
+            )
 
-                assigned_count = len(to_create) + len(to_restore)
+        with transaction.atomic():
+            if to_create:
+                RolePermission.objects.bulk_create(
+                    to_create, ignore_conflicts=False)
+            if to_restore:
+                RolePermission.objects.bulk_update(
+                    to_restore, fields=['is_deleted',
+                                        'is_active', 'updated_at']
+                )
 
-                return Response({
-                    'message': f'{assigned_count} permission(s) assigned to {role.name} successfully',
-                }, status=status.HTTP_200_OK)
-
-        except Role.DoesNotExist:
-            return Response({
-                'error': 'Role not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-        except serializers.ValidationError as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        assigned_count = len(to_create) + len(to_restore)
+        return Response(
+            {'message': f'{assigned_count} permission(s) assigned to {
+                role.name} successfully'},
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=False, methods=['post'], url_path='revoke-permissions')
     @require_permissions('roles.update', 'permissions.update')
     def revoke_permissions(self, request):
-        """
-        Revoke permissions from a role
-        Body: {
-            "role_id": 1,
-            "permission_ids": [1, 2, 3]
-        }
-        """
+        """Revoke permissions from a role"""
         serializer = RolePermissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        role_id = serializer.validated_data['role_id']
-        permission_ids = serializer.validated_data['permission_ids']
+        role = serializer.validated_data['role']
+        # list of Permission objects
+        permissions = serializer.validated_data['permission_ids']
+        permission_ids = [p.id for p in permissions]
 
-        try:
-            with transaction.atomic():
-                role = Role.objects.get(id=role_id, is_deleted=False)
+        deleted_count = RolePermission.objects.filter(
+            role=role,
+            permission_id__in=permission_ids,
+            is_deleted=False
+        ).update(is_deleted=True, is_active=False, updated_at=timezone.now())
 
-                deleted_count = RolePermission.objects.filter(
-                    role=role,
-                    permission_id__in=permission_ids,
-                    is_deleted=False
-                ).update(is_deleted=True, is_active=False)
+        if deleted_count == 0:
+            return Response(
+                {'message': 'None of the specified permissions were assigned to this role.'},
+                status=status.HTTP_200_OK
+            )
 
-                return Response({
-                    'message': f'{deleted_count} permission(s) revoked from {role.name} successfully',
-                }, status=status.HTTP_200_OK)
-
-        except Role.DoesNotExist:
-            return Response({
-                'error': 'Role not found'
-            }, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {'message': f'{deleted_count} permission(s) revoked from {
+                role.name} successfully'},
+            status=status.HTTP_200_OK
+        )
 
 
 class UserRoleViewSet(viewsets.ViewSet):
@@ -349,9 +320,6 @@ class UserRoleViewSet(viewsets.ViewSet):
         return serializer_class(*args, **kwargs)
 
     def get_serializer_context(self):
-        """
-        Extra context provided to the serializer class.
-        """
         return {
             'request': self.request,
             'format': self.format_kwarg,
@@ -361,29 +329,14 @@ class UserRoleViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='assign-roles')
     @require_permissions('roles.update', 'users.update')
     def assign_roles(self, request):
-        """
-        Assign roles to a user
-        """
+        """Assign roles to a user"""
         serializer = UserRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data['user_id']
-        role_ids = serializer.validated_data['role_ids']
+        user = serializer.validated_data['user']
+        roles = serializer.validated_data['role_ids']  # list of Role objects
 
-        user = User.objects.get(id=user_id, is_active=True)
-        roles = Role.objects.filter(
-            id__in=role_ids,
-            is_deleted=False,
-            is_active=True
-        )
-
-        if len(roles) != len(role_ids):
-            found_ids = set(roles.values_list('id', flat=True))
-            missing_ids = set(role_ids) - found_ids
-            raise serializers.ValidationError(
-                f"Roles not found: {', '.join(map(str, missing_ids))}"
-            )
-
+        # Fetch existing UserRole rows for this user+roles in one query
         existing = UserRole.objects.filter(
             user=user,
             role__in=roles
@@ -398,73 +351,65 @@ class UserRoleViewSet(viewsets.ViewSet):
             ur = existing_map.get(role.id)
             if ur is None:
                 to_create.append(
-                    UserRole(
-                        user=user,
-                        role=role,
-                        is_active=True,
-                        is_deleted=False,
-                    )
+                    UserRole(user=user, role=role,
+                             is_active=True, is_deleted=False)
                 )
             elif ur.is_deleted:
                 ur.is_deleted = False
                 ur.is_active = True
                 ur.updated_at = timezone.now()
                 to_restore.append(ur)
-        try:
-            with transaction.atomic():
-                if len(to_create) > 0:
-                    UserRole.objects.bulk_create(
-                        to_create, ignore_conflicts=False)
 
-                if len(to_restore) > 0:
-                    UserRole.objects.bulk_update(
-                        to_restore, fields=['is_deleted', 'is_active', 'updated_at'])
+        if not to_create and not to_restore:
+            return Response(
+                {'message': 'All roles are already assigned to this user.'},
+                status=status.HTTP_200_OK
+            )
 
-            assigned_count = len(to_create) + len(to_restore)
+        with transaction.atomic():
+            if to_create:
+                UserRole.objects.bulk_create(to_create, ignore_conflicts=False)
+            if to_restore:
+                UserRole.objects.bulk_update(
+                    to_restore, fields=['is_deleted',
+                                        'is_active', 'updated_at']
+                )
 
-            return Response({
-                'message': f'{assigned_count} role(s) assigned to {user.username} successfully',
-            }, status=status.HTTP_200_OK)
-
-        except User.DoesNotExist:
-            return Response({
-                'error': 'User not found or inactive'
-            }, status=status.HTTP_404_NOT_FOUND)
-        except serializers.ValidationError as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        assigned_count = len(to_create) + len(to_restore)
+        return Response(
+            {'message': f'{assigned_count} role(s) assigned to {
+                user.username} successfully'},
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=False, methods=['post'], url_path='revoke-roles')
     @require_permissions('roles.update', 'users.update')
     def revoke_roles(self, request):
-        """
-        Revoke roles from a user
-        """
+        """Revoke roles from a user"""
         serializer = UserRoleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data['user_id']
-        role_ids = serializer.validated_data['role_ids']
+        user = serializer.validated_data['user']
+        roles = serializer.validated_data['role_ids']  # list of Role objects
+        role_ids = [role.id for role in roles]
 
-        try:
-            with transaction.atomic():
-                user = User.objects.get(id=user_id, is_active=True)
+        deleted_count = UserRole.objects.filter(
+            user=user,
+            role_id__in=role_ids,
+            is_deleted=False
+        ).update(is_deleted=True, is_active=False, updated_at=timezone.now())
 
-                deleted_count = UserRole.objects.filter(
-                    user=user,
-                    role_id__in=role_ids,
-                    is_deleted=False
-                ).update(is_deleted=True, is_active=False)
+        if deleted_count == 0:
+            return Response(
+                {'message': 'None of the specified roles were assigned to this user.'},
+                status=status.HTTP_200_OK
+            )
 
-                return Response({
-                    'message': f'{deleted_count} role(s) revoked from {user.username} successfully',
-                }, status=status.HTTP_200_OK)
-
-        except User.DoesNotExist:
-            return Response({
-                'error': 'User not found or inactive'
-            }, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {'message': f'{deleted_count} role(s) revoked from {
+                user.username} successfully'},
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=False, methods=['get'], url_path='user/(?P<user_id>[^/.]+)')
     @require_permissions('roles.read', 'users.read')
