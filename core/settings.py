@@ -16,16 +16,26 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 from datetime import timedelta
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-90=z3%cpo2co8tpn6(876q^$vpqbf3dbnyneehc405t1qvh(kq'
+SECRET_KEY = os.getenv('SECRET_KEY')
 FERNET_KEY = os.getenv('FERNET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -155,13 +165,12 @@ tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
 DATABASES = {
     'default': {
         'ENGINE': 'django_tenants.postgresql_backend',
-        'NAME': tmpPostgres.path.replace('/', ''),
-        'USER': tmpPostgres.username,
-        'PASSWORD': tmpPostgres.password,
-        'HOST': tmpPostgres.hostname,
-        'PORT': 5432,
-        'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
-        'CONN_MAX_AGE': 120
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+        'CONN_MAX_AGE': 120,
     }
 }
 
@@ -297,7 +306,7 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_TASK_TIME_LIMIT = 10 * 60  # 10 minutes
 
 # ============ LOGGING CONFIGURATION ============
 
@@ -332,15 +341,10 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'colored',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'requests.log',
-            'formatter': 'verbose',
-        },
     },
     'loggers': {
         'request_logger': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },

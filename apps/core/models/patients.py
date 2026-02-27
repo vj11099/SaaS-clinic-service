@@ -6,8 +6,11 @@ import os
 
 class __EncryptedField:
     def __init__(self):
-        key = str(os.getenv("FERNET_KEY")).encode()
-        self.crypto = Fernet(key)
+        key = os.getenv("FERNET_KEY")
+        if key:
+            self.crypto = Fernet(key)
+        else:
+            self.crypto = None
 
     def encrypt(self, value):
         if value is None:

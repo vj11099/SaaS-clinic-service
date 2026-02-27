@@ -4,6 +4,7 @@ billiard==4.2.4
 boto3==1.42.50
 botocore==1.42.50
 celery==5.6.2
+certifi==2026.2.25
 cffi==2.0.0
 click==8.3.1
 click-didyoumean==0.3.1
@@ -23,6 +24,7 @@ djangorestframework_simplejwt==5.5.1
 dotenv==0.9.9
 drf-yasg==1.21.14
 gprof2dot==2025.4.14
+gunicorn==25.1.0
 inflection==0.5.1
 jmespath==1.1.0
 kombu==5.6.2
@@ -41,6 +43,7 @@ PyYAML==6.0.3
 redis==7.1.1
 rich==14.3.2
 s3transfer==0.16.0
+sentry-sdk==2.53.0
 six==1.17.0
 sqlparse==0.5.5
 tzdata==2025.3
