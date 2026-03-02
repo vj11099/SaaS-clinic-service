@@ -17,12 +17,11 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    docker compose --env-file ${ENV_FILE} down
-                    docker compose --env-file ${ENV_FILE} up -d
+                    docker compose --env-file ${ENV_FILE} --project-directory /home/your_username/SaaS-clinic-service down
+                    docker compose --env-file ${ENV_FILE} --project-directory /home/your_username/SaaS-clinic-service up -d
                 '''
             }
-        }
-    }
+        }    }
     post {
         success {
             echo 'Deployed successfully'
