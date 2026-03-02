@@ -26,7 +26,8 @@ set -e
 
 if [ "$1" = "worker" ]; then
   echo "Starting Celery worker..."
-  exec celery -A core worker --loglevel=info
+  exec celery -A core worker --loglevel=info --concurrency=2
+  # exec celery -A core worker --loglevel=info
 
 else
 #   echo "Running migrations..."
