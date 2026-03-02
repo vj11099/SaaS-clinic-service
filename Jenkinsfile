@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        ENV_FILE = credentials('env-file')
+        ENV_FILE = credentials('saas_clinic_api_keys')
     }
 
     stages {
