@@ -17,8 +17,8 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    docker compose --env-file ${ENV_FILE} --project-directory /home/your_username/SaaS-clinic-service down
-                    docker compose --env-file ${ENV_FILE} --project-directory /home/your_username/SaaS-clinic-service up -d
+                    docker compose --env-file ${ENV_FILE} --project-directory /home/vishy-arch/SaaS-clinic-service down
+                    docker compose --env-file ${ENV_FILE} --project-directory /home/vishy-arch/SaaS-clinic-service up -d
                 '''
             }
         }    }
