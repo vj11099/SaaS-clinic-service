@@ -31,8 +31,8 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
-                    cp $ENV_FILE .env
-                    docker compose build
+                    cp ${ENV_FILE} /tmp/.env
+                    docker compose --env-file /tmp/.env build
                 '''
             }
         }
@@ -40,9 +40,9 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    cp $ENV_FILE .env
-                    docker compose down
-                    docker compose up -d
+                    cp ${ENV_FILE} /tmp/.env
+                    docker compose --env-file /tmp/.env down
+                    docker compose --env-file /tmp/.env up -d
                 '''
             }
         }
