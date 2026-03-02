@@ -30,19 +30,22 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'docker compose build'
+                sh '''
+                    cp $ENV_FILE .env
+                    docker compose build
+                '''
             }
         }
 
         stage('Deploy') {
-           steps {
+            steps {
                 sh '''
-                    cp ${ENV_FILE} ./SaaS-clinic-service/.env
+                    cp $ENV_FILE .env
+                    docker compose down
                     docker compose up -d
                 '''
             }
-         }
-
+        }
     }
 
     post {
