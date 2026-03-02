@@ -1,17 +1,38 @@
 pipeline {
     agent any
-
     environment {
         ENV_FILE = credentials('saas_clinic_api_keys')
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+        stage('Build') {
+            steps {
+                sh 'docker compose --env-file ${ENV_FILE} build'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sh '''
+                    docker compose --env-file ${ENV_FILE} down
+                    docker compose --env-file ${ENV_FILE} up -d
+                '''
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Deployed successfully'
+        }
+        failure {
+            echo 'Pipeline failed — app was not redeployed'
+        }
+    }
+
+}
 
 //        stage('Test') {
 //            steps {
@@ -27,33 +48,3 @@ pipeline {
 //                '''
 //            }
 //        }
-
-        stage('Build') {
-            steps {
-                sh '''
-                    cp ${ENV_FILE} /tmp/.env
-                    docker compose --env-file /tmp/.env build
-                '''
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                sh '''
-                    cp ${ENV_FILE} /tmp/.env
-                    docker compose --env-file /tmp/.env down
-                    docker compose --env-file /tmp/.env up -d
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Deployed successfully'
-        }
-        failure {
-            echo 'Pipeline failed — app was not redeployed'
-        }
-    }
-}
