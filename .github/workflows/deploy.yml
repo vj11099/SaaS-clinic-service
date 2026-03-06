@@ -1,0 +1,33 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main] # triggers on every push to main
+  pull_request:
+    branches: [main] # also runs on PRs so you catch issues before merging
+
+jobs:
+  # ── Build & Deploy ──────────────────────────────────────────────────────────
+  deploy:
+    name: Build and Deploy
+    runs-on: self-hosted # runs on YOUR machine via the self-hosted runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Deploy
+        run: |
+          docker compose down
+          docker compose up -d
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          docker compose ps
